@@ -54,15 +54,34 @@
 
   /* ===== APP LAYOUT ===== */
   .app{display:flex;height:calc(100vh - var(--hdr))}
-  .map-col{flex:1.7;position:relative;min-width:0}
+  .map-col{flex:1;position:relative;min-width:0}
+  /* results gallery */
+  .results-col{flex:none;width:392px;background:var(--bg);border-left:1px solid var(--line-d);display:flex;flex-direction:column;overflow:hidden}
+  .rc-head{padding:13px 16px;border-bottom:1px solid var(--line-d)}
+  .rc-head h3{color:#f3ecdd;font-size:1.1rem}
+  .rc-head .rc-hint{color:var(--muted-d);font-size:.74rem;margin-top:2px}
+  .rgrid{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:14px}
+  .gcard{background:var(--bg-2);border:1px solid var(--line-d);border-radius:8px;overflow:hidden;transition:.15s}
+  .gcard.sel{border-color:var(--gold);box-shadow:0 0 0 2px rgba(194,160,92,.28)}
+  .gph{position:relative;aspect-ratio:16/10;background-size:cover;background-position:center;background-color:#15140f}
+  .gph .gbadge{position:absolute;top:9px;left:9px;font:600 .56rem Jost,sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#fff;padding:4px 9px;border-radius:999px}
+  .gph .gprice{position:absolute;bottom:8px;left:11px;font-family:'Cormorant Garamond',serif;font-weight:600;font-size:1.3rem;color:#fff;text-shadow:0 1px 5px rgba(0,0,0,.85)}
+  .gbody{padding:11px 13px 13px}
+  .gaddr{color:#f3ecdd;font-size:.88rem;font-weight:500;line-height:1.25}
+  .gmeta{color:var(--muted-d);font-size:.76rem;margin-top:3px}
+  .gacts{display:flex;gap:7px;margin-top:11px}
+  .gacts button{flex:1;font:500 .73rem Jost,sans-serif;padding:8px 6px;border-radius:5px;cursor:pointer;border:1px solid var(--line-d);background:var(--bg-3);color:#cfc7b6;transition:.15s}
+  .gacts button:hover{border-color:var(--gold)}
+  .gacts .inc.on{background:var(--bronze-bar);color:#fff;border-color:transparent}
+  .gacts .sub.on{background:var(--gold-l);color:#231b0c;border-color:transparent}
   #map{position:absolute;inset:0;background:#15140f}
   .map-badge{position:absolute;top:14px;left:14px;z-index:500;background:rgba(10,10,11,.85);backdrop-filter:blur(8px);border:1px solid var(--line-d);border-radius:8px;padding:9px 14px;color:#efe9dd;font-size:.8rem}
   .map-badge b{color:var(--gold-l);font-family:'Cormorant Garamond';font-size:1.05rem}
   .legend{position:absolute;bottom:14px;left:14px;z-index:500;background:rgba(10,10,11,.85);backdrop-filter:blur(8px);border:1px solid var(--line-d);border-radius:8px;padding:10px 13px;color:#cfc7b6;font-size:.72rem;display:flex;gap:14px}
   .legend i{display:inline-block;width:11px;height:11px;border-radius:999px;margin-right:5px;vertical-align:-1px}
 
-  .side{flex:1;max-width:430px;min-width:330px;background:var(--bg);border-left:1px solid var(--line-d);overflow-y:auto;display:flex;flex-direction:column}
-  @media(max-width:900px){.app{flex-direction:column;height:auto}.map-col{height:56vh;flex:none}.side{max-width:none;width:100%}}
+  .side{flex:none;width:360px;background:var(--bg);border-left:1px solid var(--line-d);overflow-y:auto;display:flex;flex-direction:column}
+  @media(max-width:1150px){.app{flex-direction:column;height:auto}.map-col{height:52vh;flex:none}.results-col,.side{width:100%}.rgrid{max-height:70vh}}
 
   .sec{padding:16px 18px;border-bottom:1px solid var(--line-d)}
   .sec h3{color:#f3ecdd;font-size:1.15rem;margin-bottom:3px}
@@ -268,6 +287,12 @@
       </div>
     </div>
 
+    <!-- RESULTS GALLERY -->
+    <div class="results-col">
+      <div class="rc-head"><h3>Results <span id="rc-count" style="color:var(--gold-l)"></span></h3><div class="rc-hint" id="list-hint">Adjust filters to load properties</div></div>
+      <div class="rgrid" id="rlist"></div>
+    </div>
+
     <!-- SIDE PANEL -->
     <div class="side">
       <div class="sec">
@@ -350,11 +375,6 @@
         </details>
       </div>
 
-      <div class="sec" style="flex:1">
-        <h3 style="font-size:1.05rem">Results</h3>
-        <div class="hint" id="list-hint"></div>
-        <div class="rlist" id="rlist"></div>
-      </div>
     </div>
   </div>
 </div>
@@ -612,21 +632,25 @@ async function applyFilters(){
 function renderList(){
   const subj=LISTINGS.find(l=>l.ListingId===subjectId);
   const list=$('rlist');
-  $('list-hint').textContent=visible.length+" match current filters";
-  if(!visible.length){list.innerHTML='<div class="empty-note">No listings match. Loosen the filters.</div>';return;}
+  const rc=$('rc-count'); if(rc) rc.textContent=visible.length?'· '+visible.length.toLocaleString():'';
+  $('list-hint').textContent=visible.length?visible.length+" match current filters — scan & add":"No matches";
+  if(!visible.length){list.innerHTML='<div class="empty-note">No listings match. Loosen the filters or clear the boundary.</div>';return;}
   const sorted=subj?[...visible].sort((a,b)=>haversine(subj,a)-haversine(subj,b)):visible;
-  list.innerHTML=sorted.slice(0,60).map(l=>{
-    const pr=priceOf(l), isSel=selected.has(l.ListingId);
-    const d=subj?haversine(subj,l).toFixed(1)+" mi":"";
-    return `<div class="rrow ${isSel?'sel':''}">
-      <div class="th" style="background-image:url('${l.Photo}')"><span class="sb ${statusBadge(l.StandardStatus)}">${statusLabel(l.StandardStatus)}</span></div>
-      <div class="info">
-        <div class="price">${money(pr)}</div>
-        <div class="addr">${l.UnparsedAddress}</div>
-        <div class="meta">${l.City} · ${l.BedroomsTotal}bd/${l.BathroomsTotalInteger}ba · ${l.LivingArea.toLocaleString()}sf${d?' · '+d:''}</div>
-        <div class="acts">
+  list.innerHTML=sorted.slice(0,120).map(l=>{
+    const pr=priceOf(l), isSel=selected.has(l.ListingId), isSubj=l.ListingId===subjectId;
+    const d=subj&&!isSubj?' · '+haversine(subj,l).toFixed(1)+' mi':'';
+    const ppsfTxt = l.LivingArea?(' · '+fmt(ppsf(pr,l.LivingArea))+(LEASECTX?'/sf·mo':'/sf')):'';
+    return `<div class="gcard ${isSel?'sel':''}">
+      <div class="gph" style="background-image:url('${l.Photo}')">
+        <span class="gbadge ${statusBadge(l.StandardStatus)}">${statusLabel(l.StandardStatus)}</span>
+        <span class="gprice">${money(pr)}</span>
+      </div>
+      <div class="gbody">
+        <div class="gaddr">${l.UnparsedAddress}</div>
+        <div class="gmeta">${l.City} · ${l.BedroomsTotal} bd / ${l.BathroomsTotalInteger} ba · ${l.LivingArea?l.LivingArea.toLocaleString()+' sf':'—'}${ppsfTxt}${d}</div>
+        <div class="gacts">
           <button class="inc ${isSel?'on':''}" data-id="${l.ListingId}">${isSel?'✓ Added':'Add comp'}</button>
-          <button class="sub" data-sub="${l.ListingId}">Set subject</button>
+          <button class="sub ${isSubj?'on':''}" data-sub="${l.ListingId}">${isSubj?'★ Subject':'Set subject'}</button>
         </div>
       </div></div>`;
   }).join("");
