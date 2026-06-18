@@ -551,7 +551,8 @@ function liveParams(extra){
 }
 function mergeListings(recs){recs.forEach(r=>{const i=LISTINGS.findIndex(l=>l.ListingId===r.ListingId);if(i>=0)LISTINGS[i]=r;else LISTINGS.push(r);});}
 async function fetchLive(extra){
-  const r=await fetch(CONFIG.SPARK_PROXY+'?'+liveParams(extra),{headers:{'x-app-key':sessionStorage.getItem('appkey')||''}});
+  const key=sessionStorage.getItem('appkey')||'';
+  const r=await fetch(CONFIG.SPARK_PROXY+'?'+liveParams(extra)+'&key='+encodeURIComponent(key),{headers:{'x-app-key':key}});
   if(r.status===401){ sessionStorage.removeItem('appkey'); showLogin('Incorrect password — please try again.'); throw new Error('unauthorized'); }
   if(!r.ok)throw new Error('proxy '+r.status);
   const j=await r.json();
