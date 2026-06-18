@@ -29,6 +29,14 @@
   .eyebrow{font-size:.68rem;letter-spacing:.3em;text-transform:uppercase;font-weight:500;color:var(--gold)}
   .hidden{display:none !important}
 
+  /* login gate */
+  .login{position:fixed;inset:0;z-index:200;background:rgba(8,8,9,.92);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center}
+  .login-card{width:340px;max-width:90vw;background:var(--bg-2);border:1px solid var(--line-d);border-radius:10px;padding:30px 26px;text-align:center;box-shadow:0 30px 70px rgba(0,0,0,.55)}
+  .login-card h2{color:#f3ecdd;font-size:1.9rem;margin:8px 0 4px}
+  .login-card p{color:var(--muted-d);font-size:.86rem;margin-bottom:16px}
+  .login-card input{text-align:center}
+  .login-err{color:#d98b6a;font-size:.8rem;margin-top:10px;min-height:1em}
+
   /* ===== HEADER ===== */
   .hbar{height:var(--hdr);background:var(--bg);border-bottom:1px solid var(--line-d);display:flex;align-items:center;justify-content:space-between;padding:0 22px;gap:16px}
   .hbar .l{display:flex;align-items:baseline;gap:16px;min-width:0}
@@ -211,6 +219,18 @@
 </style>
 </head>
 <body>
+
+<!-- ============================= LOGIN GATE ============================= -->
+<div id="login" class="login hidden">
+  <div class="login-card">
+    <div class="eyebrow" style="text-align:center">Phoenix Living · CMA Builder</div>
+    <h2>Team Access</h2>
+    <p>Enter the team password to load live MLS data.</p>
+    <input id="login-pw" type="password" placeholder="Team password" autocomplete="current-password">
+    <button id="login-go" class="btn" style="width:100%;margin-top:12px">Enter</button>
+    <div id="login-err" class="login-err"></div>
+  </div>
+</div>
 
 <!-- ============================= BUILDER VIEW ============================= -->
 <div id="builder">
@@ -531,13 +551,18 @@ function liveParams(extra){
 }
 function mergeListings(recs){recs.forEach(r=>{const i=LISTINGS.findIndex(l=>l.ListingId===r.ListingId);if(i>=0)LISTINGS[i]=r;else LISTINGS.push(r);});}
 async function fetchLive(extra){
-  const r=await fetch(CONFIG.SPARK_PROXY+'?'+liveParams(extra));
+  const r=await fetch(CONFIG.SPARK_PROXY+'?'+liveParams(extra),{headers:{'x-app-key':sessionStorage.getItem('appkey')||''}});
+  if(r.status===401){ sessionStorage.removeItem('appkey'); showLogin('Incorrect password — please try again.'); throw new Error('unauthorized'); }
   if(!r.ok)throw new Error('proxy '+r.status);
   const j=await r.json();
   const recs=j.value||[];
   mergeListings(recs);
   return recs;
 }
+/* ---- team login gate (free alternative to paid deployment protection) ---- */
+function showLogin(msg){ const o=$('login'); if(!o)return; o.classList.remove('hidden'); $('login-err').textContent=msg||''; const f=$('login-pw'); if(f){f.value='';f.focus();} }
+function hideLogin(){ const o=$('login'); if(o)o.classList.add('hidden'); }
+function submitLogin(){ const v=$('login-pw').value.trim(); if(!v){return;} sessionStorage.setItem('appkey',v); hideLogin(); applyFilters(); }
 async function applyFilters(){
   LEASECTX = txMode()==='lease';
   if(LIVE()){
@@ -776,8 +801,11 @@ function buildMap(){
 /* boot */
 initFilterOptions();
 initMap();
-applyFilters();
 updateSel();
+$('login-go').onclick=submitLogin;
+$('login-pw').addEventListener('keydown',e=>{if(e.key==='Enter')submitLogin();});
+if(LIVE() && !sessionStorage.getItem('appkey')){ showLogin(); }   // require team password before live data
+else { applyFilters(); }
 </script>
 </body>
 </html>

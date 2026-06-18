@@ -75,8 +75,16 @@ export default async function handler(req, res) {
   const origin = process.env.ALLOW_ORIGIN || "*";
   res.setHeader("Access-Control-Allow-Origin", origin);
   res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, x-app-key");
   if (req.method === "OPTIONS") return res.status(204).end();
+
+  // team password gate (free alternative to paid deployment protection).
+  // Set APP_PASSWORD in Vercel env vars; the builder sends it as the x-app-key header.
+  const APP_PASSWORD = process.env.APP_PASSWORD;
+  if (APP_PASSWORD) {
+    const key = req.headers["x-app-key"] || req.query.key || "";
+    if (key !== APP_PASSWORD) return res.status(401).json({ error: "Unauthorized — team password required." });
+  }
 
   const token = process.env.SPARK_ACCESS_TOKEN;
   if (!token) return res.status(500).json({ error: "SPARK_ACCESS_TOKEN not configured on the server." });
