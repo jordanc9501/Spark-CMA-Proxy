@@ -253,7 +253,7 @@
     <div class="map-col">
       <div id="map"></div>
       <div class="map-badge"><b id="map-count">0</b> properties · click a marker to select</div>
-      <button id="clear-boundary" class="hidden" style="position:absolute;top:14px;right:14px;z-index:600;background:var(--bronze-bar);color:#fff;border:1px solid var(--gold-l);border-radius:6px;padding:8px 14px;font:600 .72rem Jost,sans-serif;letter-spacing:.08em;text-transform:uppercase;cursor:pointer">Clear boundary</button>
+      <button id="clear-boundary" class="hidden" style="position:absolute;bottom:14px;right:14px;z-index:600;background:var(--bronze-bar);color:#fff;border:1px solid var(--gold-l);border-radius:6px;padding:8px 14px;font:600 .72rem Jost,sans-serif;letter-spacing:.08em;text-transform:uppercase;cursor:pointer">Clear boundary</button>
       <div class="legend">
         <span><i style="background:#7aa35a"></i>Available</span>
         <span><i style="background:#b08d57"></i>Selected comp</span>
@@ -699,7 +699,9 @@ $('subj-input').addEventListener('keydown',async e=>{if(e.key!=="Enter")return;
 /* init map */
 function initMap(){
   bmap=L.map('map',{scrollWheelZoom:true}).setView([33.535,-111.94],12);
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{attribution:'&copy; OpenStreetMap &copy; CARTO',maxZoom:19}).addTo(bmap);
+  const darkBase=L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{attribution:'&copy; OpenStreetMap &copy; CARTO',maxZoom:19}).addTo(bmap);
+  const satBase=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{attribution:'Imagery &copy; Esri',maxZoom:19});
+  L.control.layers({'Map':darkBase,'Satellite':satBase},null,{position:'topright'}).addTo(bmap);
   markerLayer=L.layerGroup().addTo(bmap);
   // ---- draw-a-boundary search (polygon / rectangle) ----
   if(typeof L.Control!=='undefined' && L.Control.Draw){
@@ -831,7 +833,9 @@ function buildMap(){
   const note=$('map-note');if(pmapObj){pmapObj.remove();pmapObj=null;}
   try{if(typeof L==="undefined")throw 0;
     pmapObj=L.map('pmap',{scrollWheelZoom:false}).setView([SUBJECT.Latitude,SUBJECT.Longitude],13);
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{attribution:'&copy; OpenStreetMap &copy; CARTO',maxZoom:19}).addTo(pmapObj);
+    const pdark=L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{attribution:'&copy; OpenStreetMap &copy; CARTO',maxZoom:19}).addTo(pmapObj);
+    const psat=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{attribution:'Imagery &copy; Esri',maxZoom:19});
+    L.control.layers({'Map':pdark,'Satellite':psat},null,{position:'topright'}).addTo(pmapObj);
     const ic=(txt,sub)=>L.divIcon({html:`<div style="background:${sub?'#8a6c3c':'#c2a05c'};color:#fff;font:600 11px Jost,sans-serif;padding:5px 9px;border-radius:6px;white-space:nowrap;box-shadow:0 4px 10px rgba(0,0,0,.5);border:1px solid #f3ead5">${txt}</div>`,iconSize:[10,10],iconAnchor:[20,28]});
     ALL.forEach(p=>L.marker([p.Latitude,p.Longitude],{icon:ic(p._subject?"★ "+money(p._price):money(p._price),!p._subject)}).addTo(pmapObj).bindPopup(`<b>${p.UnparsedAddress}</b><br>${money(p._price)} · ${p.LivingArea.toLocaleString()} sf`));
     setTimeout(()=>pmapObj.invalidateSize(),200);

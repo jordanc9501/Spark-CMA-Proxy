@@ -113,14 +113,18 @@ export default async function handler(req, res) {
       if (digits.length >= 6 && !/[a-z]/i.test(term)) {
         out = await sparkFetch(`ListingId eq '${esc(term)}'`, 5);
       } else {
-        const num = (term.match(/\d+/) || [])[0];
-        if (num) {
-          try { out = await sparkFetch(`StreetNumberNumeric eq ${+num}`, 60); }
-          catch (_) { out = await sparkFetch(`StreetNumber eq '${esc(num)}'`, 60); }
-        }
+        // scope by zip or city (filters known to work), then match the address text client-side
+        const zip = (term.match(/\b\d{5}\b/) || [])[0];
+        const CITIES = ["Paradise Valley","Scottsdale","Phoenix","Fountain Hills","Cave Creek","Carefree","Tempe","Mesa","Chandler","Gilbert","Glendale","Peoria","Surprise","Goodyear","Litchfield Park"];
+        const cityMatch = CITIES.find(c => term.toLowerCase().includes(c.toLowerCase()));
+        const filt = zip ? `PostalCode eq '${esc(zip)}'` : (cityMatch ? `City eq '${esc(cityMatch)}'` : "");
+        out = await sparkFetch(filt, 200);
         const TYPES = ["e","w","n","s","st","rd","road","dr","drive","ln","lane","ave","avenue","way","ct","court","pl","place","blvd","pkwy","parkway","trail","cir","circle","az","arizona"];
-        const names = term.toLowerCase().replace(/[.,#]/g, " ").split(/\s+/).filter(w => w && !/^\d+$/.test(w) && !TYPES.includes(w));
+        const cityWords = cityMatch ? cityMatch.toLowerCase().split(" ") : [];
+        const names = term.toLowerCase().replace(/[.,#]/g, " ").split(/\s+/)
+          .filter(w => w && !TYPES.includes(w) && w !== zip && !cityWords.includes(w));
         if (names.length) out = out.filter(x => { const a = (x.UnparsedAddress || "").toLowerCase(); return names.every(w => a.includes(w)); });
+        out = out.slice(0, 10);
       }
       res.setHeader("Cache-Control", "no-store");
       return res.status(200).json({ count: out.length, value: out });
