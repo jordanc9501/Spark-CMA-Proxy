@@ -246,7 +246,7 @@
   .bar.subject .col{background:var(--champagne)}
   .bar .v{order:-1;font-family:'Cormorant Garamond';font-size:.98rem;font-weight:600;color:var(--ink)}
   .bar.subject .v{color:var(--gold-d)}
-  .bar .x{font-size:.62rem;color:var(--muted);letter-spacing:.04em;text-transform:uppercase;text-align:center}
+  .bar .x{font-size:.6rem;color:var(--muted);letter-spacing:.01em;text-align:center;line-height:1.15;max-width:100%;overflow-wrap:anywhere}
   .mkt-stats{display:grid;grid-template-columns:1fr 1fr;gap:14px}
   .mkt-stats .m{background:var(--bg-2);border:1px solid var(--line-d);border-radius:var(--radius);padding:22px}
   .mkt-stats .m .n{font-family:'Cormorant Garamond';font-size:2rem;font-weight:600;color:#f3ecdd;line-height:1}
@@ -267,6 +267,29 @@
   .pres footer{background:#070707;color:#9b958a;text-align:center;padding:60px 0}
   .pres footer .agent b{color:#fff;font-weight:500}
   .pres footer .tiny{margin-top:22px;font-size:.72rem;color:#615c52;max-width:660px;margin:22px auto 0;line-height:1.7}
+  /* scroll-reveal for presentation sections */
+  .pres .reveal{opacity:0;transform:translateY(30px);transition:opacity .75s ease,transform .75s ease}
+  .pres .reveal.in{opacity:1;transform:none}
+  /* history rows */
+  .hist-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--line-d)}
+  .hist-row b{color:#f3ecdd;font-weight:500;font-size:.9rem;display:block}
+  .hist-row span{color:var(--muted-d);font-size:.73rem}
+  .hist-acts{display:flex;gap:7px;flex:none}
+  .hist-acts button{font:500 .72rem Jost,sans-serif;padding:7px 13px;border-radius:5px;cursor:pointer;border:1px solid var(--gold);background:transparent;color:var(--gold-l)}
+  .hist-acts .del{border-color:#7a3b34;color:#d98b6a}
+  /* print → PDF */
+  @media print{
+    nav,.hbar,.app,#builder,#login,#listing-modal,#history-modal,.topbar{display:none!important}
+    #presentation{display:block!important;background:#fff}
+    .pres .on-dark{background:#fff!important;color:#1a1814!important}
+    .pres .reveal{opacity:1!important;transform:none!important}
+    .pres section{padding:26px 0;page-break-inside:avoid}
+    .hero{height:540px}
+    .hero .slide{display:none!important}.hero .slide.active{display:block!important}
+    .arrow,.dots{display:none!important}
+    .reco::before{display:none}
+    .mkt-stats .m,.stat,.card-dark{background:#f7f4ee!important}
+  }
 </style>
 </head>
 <body>
@@ -292,6 +315,7 @@
     </div>
     <div class="r">
       <div class="subjnote" id="subjnote">No subject selected</div>
+      <button class="btn ghost sm" id="history-btn">History</button>
       <button class="btn" id="generate" disabled>Generate CMA →</button>
     </div>
   </div>
@@ -416,11 +440,22 @@
   </div>
 </div>
 
+<!-- ============================ HISTORY ============================ -->
+<div id="history-modal" class="lm hidden">
+  <div class="lm-card" style="width:min(580px,95vw);max-height:82vh">
+    <div class="lm-body" id="hist-body" style="padding:22px"></div>
+  </div>
+</div>
+
 <!-- ============================ PRESENTATION VIEW ========================= -->
 <div id="presentation" class="pres hidden">
   <div class="topbar"><div class="wrap">
     <button class="back" id="back">← Back to Builder</button>
     <div class="nm">Comparative Market Analysis · <b id="pv-addr">—</b></div>
+    <div style="display:flex;gap:8px">
+      <button class="back" id="saveshare">⤴ Save &amp; Share</button>
+      <button class="back" id="pdf">⬇ PDF</button>
+    </div>
   </div></div>
   <section class="hero" id="hero" style="padding:0">
     <div id="slides"></div>
@@ -559,7 +594,9 @@ const statusBadge=s=>s==="Closed"?"badge-sold":s==="Pending"?"badge-pending":s==
 let subjectId=null;
 const selected=new Set();
 let visible=[];
-let bmap, markerLayer, drawnItems=null, polygon=null;
+let bmap, markerLayer, drawnItems=null, polygon=null, markerById={};
+function baseRadius(id){return id===subjectId?9:selected.has(id)?8:6;}
+function highlightMarker(id,on){const m=markerById[id];if(!m)return;if(on){m.setStyle({radius:12,weight:3,color:'#fff'});m.bringToFront();}else{m.setStyle({radius:baseRadius(id),weight:1,color:'#0a0a0b'});}}
 function inPoly(lat,lng,poly){let inside=false;for(let i=0,j=poly.length-1;i<poly.length;j=i++){const yi=poly[i][0],xi=poly[i][1],yj=poly[j][0],xj=poly[j][1];const hit=((yi>lat)!==(yj>lat))&&(lng<(xj-xi)*(lat-yi)/(yj-yi)+xi);if(hit)inside=!inside;}return inside;}
 function clearBoundary(){polygon=null;if(drawnItems)drawnItems.clearLayers();const b=$('clear-boundary');if(b)b.classList.add('hidden');applyFilters();}
 
@@ -691,7 +728,11 @@ function renderList(){
   }).join("");
   list.querySelectorAll('.inc').forEach(b=>b.onclick=()=>toggleComp(b.dataset.id));
   list.querySelectorAll('.sub').forEach(b=>b.onclick=()=>setSubject(b.dataset.sub));
-  list.querySelectorAll('.gcard').forEach(c=>c.addEventListener('click',e=>{ if(e.target.closest('button'))return; if(c.dataset.open) openListing(c.dataset.open); }));
+  list.querySelectorAll('.gcard').forEach(c=>{
+    c.addEventListener('click',e=>{ if(e.target.closest('button'))return; if(c.dataset.open) openListing(c.dataset.open); });
+    c.addEventListener('mouseenter',()=>highlightMarker(c.dataset.open,true));
+    c.addEventListener('mouseleave',()=>highlightMarker(c.dataset.open,false));
+  });
 }
 
 /* ---- listing popup with photo carousel ---- */
@@ -737,15 +778,17 @@ function statusColor(s){return s==='Pending'?'#e8b32a':s==='Closed'?'#3b82f6':s=
 function markerColor(l){return l.ListingId===subjectId?'#e3cb93':selected.has(l.ListingId)?'#b08d57':statusColor(l.StandardStatus);}
 function renderMarkers(){
   if(!bmap) return;
-  markerLayer.clearLayers();
+  markerLayer.clearLayers(); markerById={};
   const subj=LISTINGS.find(l=>l.ListingId===subjectId);
   const show=[...visible];
   if(subj && !show.includes(subj)) show.push(subj);
   show.forEach(l=>{
-    const isSubj=l.ListingId===subjectId, isSel=selected.has(l.ListingId);
+    if(l.Latitude==null) return;
     const m=L.circleMarker([l.Latitude,l.Longitude],{
-      radius:isSubj?9:isSel?8:5, color:'#0a0a0b', weight:1,
+      radius:baseRadius(l.ListingId), color:'#0a0a0b', weight:1,
       fillColor:markerColor(l), fillOpacity:0.95});
+    markerById[l.ListingId]=m;
+    const isSel=selected.has(l.ListingId);
     m.bindPopup(`<div class="pp"><div class="p">${money(priceOf(l))}</div><div class="a">${l.UnparsedAddress}</div>
       <div class="m">${l.City} · ${statusLabel(l.StandardStatus)} · ${l.BedroomsTotal}bd/${l.BathroomsTotalInteger}ba · ${l.LivingArea.toLocaleString()}sf</div>
       <div class="b"><button class="gold" onclick="window.toggleComp('${l.ListingId}')">${isSel?'Remove comp':'Add comp'}</button>
@@ -820,9 +863,9 @@ document.addEventListener('click',e=>{ if(!e.target.closest('#subj-results') && 
 /* init map */
 function initMap(){
   bmap=L.map('map',{scrollWheelZoom:true}).setView([33.535,-111.94],12);
-  const darkBase=L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{attribution:'&copy; OpenStreetMap &copy; CARTO',maxZoom:19}).addTo(bmap);
+  const lightBase=L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{attribution:'&copy; OpenStreetMap &copy; CARTO',maxZoom:19}).addTo(bmap);
   const satBase=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{attribution:'Imagery &copy; Esri',maxZoom:19});
-  L.control.layers({'Map':darkBase,'Satellite':satBase},null,{position:'topright'}).addTo(bmap);
+  L.control.layers({'Map':lightBase,'Satellite':satBase},null,{position:'topright'}).addTo(bmap);
   markerLayer=L.layerGroup().addTo(bmap);
   // ---- draw-a-boundary search (polygon / rectangle) ----
   if(typeof L.Control!=='undefined' && L.Control.Draw){
@@ -848,16 +891,76 @@ function initMap(){
 /* ===================== PRESENTATION ===================== */
 let SUBJECT,COMPS,ALL,carouselTimer,pmapObj;
 $('generate').onclick=()=>{
+  LEASECTX=txMode()==='lease';
   SUBJECT=LISTINGS.find(l=>l.ListingId===subjectId);
   COMPS=[...selected].map(id=>LISTINGS.find(l=>l.ListingId===id)).sort((a,b)=>haversine(SUBJECT,a)-haversine(SUBJECT,b));
   COMPS.forEach(c=>c.DistanceMiles=+haversine(SUBJECT,c).toFixed(1));
   ALL=[{...SUBJECT,_subject:true,_price:priceOf(SUBJECT)},...COMPS.map(c=>({...c,_subject:false,_price:priceOf(c)}))];
   buildPresentation();
-  $('builder').classList.add('hidden'); $('presentation').classList.remove('hidden'); window.scrollTo(0,0);
+  saveHistory(ALL, txMode());
+  $('builder').classList.add('hidden'); $('presentation').classList.remove('hidden'); window.scrollTo(0,0); setupReveal();
 };
 $('back').onclick=()=>{if(carouselTimer)clearInterval(carouselTimer);
   $('presentation').classList.add('hidden'); $('builder').classList.remove('hidden'); window.scrollTo(0,0);
   setTimeout(()=>{if(bmap)bmap.invalidateSize();},150);};
+$('pdf').onclick=()=>window.print();
+
+/* scroll-reveal */
+let revealObs;
+function setupReveal(){
+  const secs=document.querySelectorAll('#presentation > section:not(.hero), #presentation > footer');
+  secs.forEach(s=>{s.classList.add('reveal');s.classList.remove('in');});
+  if(revealObs) revealObs.disconnect();
+  revealObs=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');revealObs.unobserve(e.target); if(e.target.id==='map-sec'&&pmapObj) setTimeout(()=>pmapObj.invalidateSize(),450);}}),{threshold:0.12});
+  setTimeout(()=>secs.forEach(s=>revealObs.observe(s)),60);
+}
+
+/* on-device history (saved in this browser; cloud sync is the next phase) */
+function saveHistory(all, mode){
+  try{
+    const entry={ name: all[0].UnparsedAddress, date: new Date().toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'}), mode: mode||'sale', all };
+    let h=JSON.parse(localStorage.getItem('cmaHistory')||'[]');
+    const sig=all.map(x=>x.ListingId).join('|')+'|'+(mode||'sale');
+    h=h.filter(e=>e.all.map(x=>x.ListingId).join('|')+'|'+e.mode!==sig);
+    h.unshift(entry); h=h.slice(0,40);
+    localStorage.setItem('cmaHistory',JSON.stringify(h));
+  }catch(e){}
+}
+async function openHistoryPanel(){
+  const body=$('hist-body');
+  $('history-modal').classList.remove('hidden');
+  body.innerHTML='<h2 style="color:#f3ecdd;font-family:\'Cormorant Garamond\',serif;font-size:1.7rem;margin-bottom:10px">Saved CMAs</h2><p style="color:var(--muted-d);font-size:.8rem">Loading…</p>';
+  // cloud-saved (shareable) first
+  let cloud=null;
+  try{ const r=await fetch('/api/cma?list=1',{headers:{'x-app-key':sessionStorage.getItem('appkey')||''}}); if(r.ok) cloud=(await r.json()).items||[]; }catch(e){}
+  let h=[]; try{h=JSON.parse(localStorage.getItem('cmaHistory')||'[]');}catch(e){}
+  let html='<h2 style="color:#f3ecdd;font-family:\'Cormorant Garamond\',serif;font-size:1.7rem;margin-bottom:10px">Saved CMAs</h2>';
+  if(cloud){
+    html+='<div style="color:var(--gold);font-size:.66rem;letter-spacing:.16em;text-transform:uppercase;margin-bottom:6px">Cloud · shareable</div>';
+    html+= cloud.length? cloud.map(e=>`<div class="hist-row"><div style="min-width:0"><b>${e.name}</b><span>${new Date(e.date).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}${e.mode==='lease'?' · Lease':''}</span></div><div class="hist-acts"><button data-cloud="${e.id}">Open</button><button data-link="${e.id}">Copy link</button></div></div>`).join('') : '<div style="color:var(--muted-d);font-size:.82rem;margin-bottom:12px">None saved to cloud yet — open a CMA and click “Save &amp; Share”.</div>';
+  }else{
+    html+='<div class="api-note" style="margin:0 0 12px">Cloud storage isn’t set up yet (add a Vercel KV store). Showing this device’s local history.</div>';
+  }
+  if(h.length){
+    html+='<div style="color:var(--muted-d);font-size:.66rem;letter-spacing:.16em;text-transform:uppercase;margin:14px 0 6px">This device</div>';
+    html+= h.map((e,i)=>`<div class="hist-row"><div style="min-width:0"><b>${e.name}</b><span>${e.date} · ${e.all.length-1} comps${e.mode==='lease'?' · Lease':''}</span></div><div class="hist-acts"><button data-open="${i}">Open</button><button data-del="${i}" class="del">×</button></div></div>`).join('');
+  }
+  body.innerHTML=html;
+  body.querySelectorAll('[data-cloud]').forEach(b=>b.onclick=()=>{ $('history-modal').classList.add('hidden'); loadShared(b.dataset.cloud,false); });
+  body.querySelectorAll('[data-link]').forEach(b=>b.onclick=async()=>{ const link=location.origin+'/?id='+b.dataset.link; try{await navigator.clipboard.writeText(link);}catch(_){}; b.textContent='✓ Copied'; setTimeout(()=>b.textContent='Copy link',1800); });
+  body.querySelectorAll('[data-open]').forEach(b=>b.onclick=()=>openFromHistory(+b.dataset.open));
+  body.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{let h2=JSON.parse(localStorage.getItem('cmaHistory')||'[]');h2.splice(+b.dataset.del,1);localStorage.setItem('cmaHistory',JSON.stringify(h2));openHistoryPanel();});
+}
+function openFromHistory(i){
+  let h=[]; try{h=JSON.parse(localStorage.getItem('cmaHistory')||'[]');}catch(e){}
+  const e=h[i]; if(!e)return;
+  LEASECTX=e.mode==='lease'; ALL=e.all; SUBJECT=e.all[0]; COMPS=e.all.slice(1);
+  $('history-modal').classList.add('hidden');
+  buildPresentation();
+  $('builder').classList.add('hidden'); $('presentation').classList.remove('hidden'); window.scrollTo(0,0); setupReveal();
+}
+$('history-btn').onclick=openHistoryPanel;
+$('history-modal').addEventListener('click',e=>{ if(e.target.id==='history-modal') $('history-modal').classList.add('hidden'); });
 
 const ICON={
   sqft:'<svg viewBox="0 0 24 24"><path d="M3 3h18v18H3z"/><path d="M3 9h4M3 15h4M9 21v-4M15 21v-4"/></svg>',
@@ -930,8 +1033,9 @@ function buildAdj(){
 }
 function buildMarket(rows){
   const subjPPSF=rows.reduce((s,r)=>s+ppsf(r.a.adjusted,SUBJECT.LivingArea),0)/rows.length;
-  const items=rows.map(r=>({label:"#"+r.c.ListingId.slice(-3),v:ppsf(priceOf(r.c),r.c.LivingArea),subject:false}));
-  items.push({label:"Subject",v:subjPPSF,subject:true});const max=Math.max(...items.map(i=>i.v))*1.2;
+  const shortAddr=l=>((l.UnparsedAddress||"").split(",")[0]||"").trim();
+  const items=rows.map(r=>({label:shortAddr(r.c),v:ppsf(priceOf(r.c),r.c.LivingArea),subject:false}));
+  items.push({label:shortAddr(SUBJECT)+" (subject)",v:subjPPSF,subject:true});const max=Math.max(...items.map(i=>i.v))*1.2;
   $('ppsf-bars').innerHTML=items.map(i=>`<div class="bar ${i.subject?'subject':''}"><div class="col" style="height:${(i.v/max*100).toFixed(1)}%"></div><div class="v">${fmt(i.v)}</div><div class="x">${i.label}</div></div>`).join("");
   const sold=COMPS.filter(c=>c.StandardStatus==="Closed");
   const avg=sold.length?sold.reduce((s,c)=>s+ppsf(priceOf(c),c.LivingArea),0)/sold.length:subjPPSF;
@@ -954,9 +1058,9 @@ function buildMap(){
   const note=$('map-note');if(pmapObj){pmapObj.remove();pmapObj=null;}
   try{if(typeof L==="undefined")throw 0;
     pmapObj=L.map('pmap',{scrollWheelZoom:false}).setView([SUBJECT.Latitude,SUBJECT.Longitude],13);
-    const pdark=L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{attribution:'&copy; OpenStreetMap &copy; CARTO',maxZoom:19}).addTo(pmapObj);
+    const plight=L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{attribution:'&copy; OpenStreetMap &copy; CARTO',maxZoom:19}).addTo(pmapObj);
     const psat=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{attribution:'Imagery &copy; Esri',maxZoom:19});
-    L.control.layers({'Map':pdark,'Satellite':psat},null,{position:'topright'}).addTo(pmapObj);
+    L.control.layers({'Map':plight,'Satellite':psat},null,{position:'topright'}).addTo(pmapObj);
     const ic=(txt,sub)=>L.divIcon({html:`<div style="background:${sub?'#8a6c3c':'#c2a05c'};color:#fff;font:600 11px Jost,sans-serif;padding:5px 9px;border-radius:6px;white-space:nowrap;box-shadow:0 4px 10px rgba(0,0,0,.5);border:1px solid #f3ead5">${txt}</div>`,iconSize:[10,10],iconAnchor:[20,28]});
     ALL.forEach(p=>L.marker([p.Latitude,p.Longitude],{icon:ic(p._subject?"★ "+money(p._price):money(p._price),!p._subject)}).addTo(pmapObj).bindPopup(`<b>${p.UnparsedAddress}</b><br>${money(p._price)} · ${p.LivingArea.toLocaleString()} sf`));
     setTimeout(()=>pmapObj.invalidateSize(),200);
@@ -964,12 +1068,42 @@ function buildMap(){
   }catch(e){$('pmap').innerHTML='<div style="height:100%;display:grid;place-items:center;color:#9a948a;text-align:center;padding:20px">Map loads when online.</div>';}
 }
 
+/* ---- cloud save & shareable client links ---- */
+$('saveshare').onclick=async()=>{
+  const btn=$('saveshare'); const orig=btn.textContent;
+  try{
+    btn.textContent='Saving…';
+    const r=await fetch('/api/cma',{method:'POST',headers:{'Content-Type':'application/json','x-app-key':sessionStorage.getItem('appkey')||''},body:JSON.stringify({all:ALL,mode:(LEASECTX?'lease':'sale'),name:SUBJECT.UnparsedAddress})});
+    const j=await r.json();
+    if(!r.ok||!j.id) throw new Error(j.error||'Save failed');
+    const link=location.origin+'/?id='+j.id;
+    try{ await navigator.clipboard.writeText(link); }catch(_){}
+    btn.textContent='✓ Link copied';
+    window.prompt('Client share link (read-only, no login) — copied to clipboard:', link);
+    setTimeout(()=>btn.textContent=orig,2600);
+  }catch(e){ btn.textContent=orig; alert('Could not save: '+e.message+' — if cloud storage is not set up yet, add a Vercel KV store to the project.'); }
+};
+async function loadShared(id, isClient){
+  try{
+    const r=await fetch('/api/cma?id='+encodeURIComponent(id));
+    if(!r.ok) throw 0;
+    const rec=await r.json();
+    LEASECTX=rec.mode==='lease'; ALL=rec.all; SUBJECT=rec.all[0]; COMPS=rec.all.slice(1);
+    buildPresentation();
+    $('builder').classList.add('hidden'); $('login').classList.add('hidden'); $('presentation').classList.remove('hidden');
+    if(isClient){ $('back').style.display='none'; $('saveshare').style.display='none'; }
+    window.scrollTo(0,0); setupReveal();
+  }catch(e){ document.body.innerHTML='<div style="color:#cdc6b8;font-family:Jost,sans-serif;padding:60px;text-align:center;background:#0a0a0b;min-height:100vh">This shared CMA could not be loaded — the link may be invalid or expired.</div>'; }
+}
+
 /* boot */
 initFilterOptions();
 updateSel();
 $('login-go').onclick=submitLogin;
 $('login-pw').addEventListener('keydown',e=>{if(e.key==='Enter')submitLogin();});
-if(LIVE()){ sessionStorage.removeItem('appkey'); showLogin(); }   // login first; map builds after login
+const shareId=new URLSearchParams(location.search).get('id');
+if(shareId){ loadShared(shareId, true); }                          // public client view — no login
+else if(LIVE()){ sessionStorage.removeItem('appkey'); showLogin(); }
 else { initMap(); applyFilters(); }
 </script>
 </body>
