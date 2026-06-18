@@ -30,7 +30,7 @@
   .hidden{display:none !important}
 
   /* login gate */
-  .login{position:fixed;inset:0;z-index:200;background:rgba(8,8,9,.92);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center}
+  .login{position:fixed;inset:0;z-index:4000;background:rgba(8,8,9,.95);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center}
   .login-card{width:340px;max-width:90vw;background:var(--bg-2);border:1px solid var(--line-d);border-radius:10px;padding:30px 26px;text-align:center;box-shadow:0 30px 70px rgba(0,0,0,.55)}
   .login-card h2{color:#f3ecdd;font-size:1.9rem;margin:8px 0 4px}
   .login-card p{color:var(--muted-d);font-size:.86rem;margin-bottom:16px}
@@ -569,7 +569,7 @@ async function fetchLive(extra){
 /* ---- team login gate (free alternative to paid deployment protection) ---- */
 function showLogin(msg){ const o=$('login'); if(!o)return; o.classList.remove('hidden'); $('login-err').textContent=msg||''; const f=$('login-pw'); if(f){f.value='';f.focus();} }
 function hideLogin(){ const o=$('login'); if(o)o.classList.add('hidden'); }
-function submitLogin(){ const v=$('login-pw').value.trim(); if(!v){return;} sessionStorage.setItem('appkey',v); hideLogin(); applyFilters(); }
+function submitLogin(){ const v=$('login-pw').value.trim(); if(!v){return;} sessionStorage.setItem('appkey',v); hideLogin(); if(typeof bmap==='undefined'||!bmap) initMap(); applyFilters(); }
 async function applyFilters(){
   LEASECTX = txMode()==='lease';
   if(LIVE()){
@@ -807,12 +807,11 @@ function buildMap(){
 
 /* boot */
 initFilterOptions();
-initMap();
 updateSel();
 $('login-go').onclick=submitLogin;
 $('login-pw').addEventListener('keydown',e=>{if(e.key==='Enter')submitLogin();});
-if(LIVE()){ sessionStorage.removeItem('appkey'); showLogin(); }   // always start clean: clear any stale session, require team password
-else { applyFilters(); }
+if(LIVE()){ sessionStorage.removeItem('appkey'); showLogin(); }   // login first; map builds after login
+else { initMap(); applyFilters(); }
 </script>
 </body>
 </html>
