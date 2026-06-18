@@ -69,6 +69,7 @@
   label.fld{display:block;font-size:.62rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted-d);margin:11px 0 5px}
   input,select{width:100%;background:var(--bg-3);border:1px solid var(--line-d);border-radius:5px;color:#f3ecdd;padding:8px 10px;font-family:'Jost';font-size:.86rem}
   input:focus,select:focus{outline:none;border-color:var(--gold)}
+  input[type=date]{color-scheme:dark}
   select[multiple]{height:auto;min-height:74px}
   .row2{display:grid;grid-template-columns:1fr 1fr;gap:9px}
   .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px}
@@ -180,7 +181,7 @@
   table.spec td.subject-col{background:#faf5ea;font-weight:500}
   table.spec tr:last-child td,table.spec tr:last-child th{border-bottom:none}
   table.adj{border-collapse:collapse;width:100%;min-width:760px;font-size:.86rem;background:#fff}
-  table.adj th,table.adj td{padding:13px 16px;text-align:right;border-bottom:1px solid var(--line)}
+  table.adj th,table.adj td{padding:13px 16px;text-align:right;border-bottom:1px solid var(--line);color:var(--ink)}
   table.adj th:first-child,table.adj td:first-child{text-align:left}
   table.adj thead th{font-family:'Jost';font-weight:500;font-size:.64rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);background:var(--panel-2)}
   table.adj tbody tr:last-child td{border-bottom:none}
@@ -191,11 +192,12 @@
   .mkt-grid{display:grid;grid-template-columns:1.15fr .85fr;gap:50px;align-items:center}
   @media(max-width:880px){.mkt-grid{grid-template-columns:1fr;gap:36px}}
   .bars{display:flex;align-items:flex-end;gap:12px;height:250px;padding-top:10px}
-  .bar{flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;height:100%}
-  .bar .col{width:100%;background:linear-gradient(180deg,#7a5f37,#5a4527);border-radius:4px 4px 0 0;transition:height .8s ease}
+  .bar{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:6px;height:100%}
+  .bar .col{width:100%;min-height:4px;background:linear-gradient(180deg,#b08d57,#7a5f37);border-radius:4px 4px 0 0;transition:height .8s ease}
   .bar.subject .col{background:var(--champagne)}
-  .bar .v{font-family:'Cormorant Garamond';font-size:.85rem;font-weight:600;color:#fff}
-  .bar .x{font-size:.58rem;color:var(--muted-d);letter-spacing:.04em;text-transform:uppercase;text-align:center}
+  .bar .v{order:-1;font-family:'Cormorant Garamond';font-size:.98rem;font-weight:600;color:var(--ink)}
+  .bar.subject .v{color:var(--gold-d)}
+  .bar .x{font-size:.62rem;color:var(--muted);letter-spacing:.04em;text-transform:uppercase;text-align:center}
   .mkt-stats{display:grid;grid-template-columns:1fr 1fr;gap:14px}
   .mkt-stats .m{background:var(--bg-2);border:1px solid var(--line-d);border-radius:var(--radius);padding:22px}
   .mkt-stats .m .n{font-family:'Cormorant Garamond';font-size:2rem;font-weight:600;color:#f3ecdd;line-height:1}
@@ -325,6 +327,9 @@
               <div><label class="fld">Max Dist (mi)</label><input id="f-dist" type="number" step="0.1" placeholder="Any"></div>
               <div><label class="fld">Sold within (mo)</label><input id="f-months" type="number" placeholder="Any"></div>
             </div>
+
+            <label class="fld">Sold date range (closed comps)</label>
+            <div class="row2"><input id="f-dfrom" type="date" title="Sold from"><input id="f-dto" type="date" title="Sold to"></div>
 
             <div style="display:flex;gap:9px;margin-top:14px">
               <button class="btn sm" id="apply" style="flex:1">Apply Filters</button>
@@ -529,7 +534,8 @@ function passes(l){
   if(l.GarageSpaces<(+$('f-garage').value||0)) return false;
   const subj=LISTINGS.find(x=>x.ListingId===subjectId);
   if(subj){const md=+$('f-dist').value; if(md && haversine(subj,l)>md) return false;}
-  if(l.StandardStatus==="Closed"){const mo=+$('f-months').value; if(mo && monthsAgo(l.CloseDate)>mo) return false;}
+  if(l.StandardStatus==="Closed"){const mo=+$('f-months').value; if(mo && monthsAgo(l.CloseDate)>mo) return false;
+    const df=$('f-dfrom').value,dt=$('f-dto').value; if(df&&(!l.CloseDate||l.CloseDate<df))return false; if(dt&&(!l.CloseDate||l.CloseDate>dt))return false;}
   return true;
 }
 
@@ -541,7 +547,7 @@ function liveParams(extra){
   if(csv('f-city'))p.set('city',csv('f-city'));
   if(csv('f-zip'))p.set('zip',csv('f-zip'));
   [['pmin','f-pmin'],['pmax','f-pmax'],['beds','f-beds'],['baths','f-baths'],['sqmin','f-sqmin'],['sqmax','f-sqmax'],
-   ['ymin','f-ymin'],['ymax','f-ymax'],['garage','f-garage'],['dist','f-dist'],['months','f-months']]
+   ['ymin','f-ymin'],['ymax','f-ymax'],['garage','f-garage'],['dist','f-dist'],['months','f-months'],['dfrom','f-dfrom'],['dto','f-dto']]
    .forEach(([k,id])=>{const v=$(id).value;if(v)p.set(k,v);});
   ['dtype','style','levels','pool','cpool'].forEach(k=>{const v=$('f-'+k).value;if(v)p.set(k,v);});
   const subj=LISTINGS.find(l=>l.ListingId===subjectId);
@@ -654,11 +660,11 @@ $('apply').onclick=applyFilters;
 $('reset').onclick=()=>{
   document.querySelectorAll('#f-city .chip,#f-zip .chip').forEach(c=>c.classList.remove('on'));
   document.querySelectorAll('#f-status .chip').forEach(c=>c.classList.add('on'));
-  ['f-pmin','f-pmax','f-beds','f-baths','f-sqmin','f-sqmax','f-ymin','f-ymax','f-garage','f-dist','f-months'].forEach(i=>$(i).value="");
+  ['f-pmin','f-pmax','f-beds','f-baths','f-sqmin','f-sqmax','f-ymin','f-ymax','f-garage','f-dist','f-months','f-dfrom','f-dto'].forEach(i=>$(i).value="");
   ['f-dtype','f-style','f-levels','f-pool','f-cpool'].forEach(i=>$(i).value="");
   applyFilters();
 };
-['f-pmin','f-pmax','f-beds','f-baths','f-sqmin','f-sqmax','f-ymin','f-ymax','f-garage','f-dist','f-months','f-dtype','f-style','f-levels','f-pool','f-cpool'].forEach(i=>$(i).addEventListener('change',applyFilters));
+['f-pmin','f-pmax','f-beds','f-baths','f-sqmin','f-sqmax','f-ymin','f-ymax','f-garage','f-dist','f-months','f-dfrom','f-dto','f-dtype','f-style','f-levels','f-pool','f-cpool'].forEach(i=>$(i).addEventListener('change',applyFilters));
 $('subj-input').addEventListener('keydown',async e=>{if(e.key!=="Enter")return;
   const raw=$('subj-input').value.trim();
   if(LIVE()){
@@ -768,7 +774,7 @@ function buildAdj(){
 function buildMarket(rows){
   const subjPPSF=rows.reduce((s,r)=>s+ppsf(r.a.adjusted,SUBJECT.LivingArea),0)/rows.length;
   const items=rows.map(r=>({label:"#"+r.c.ListingId.slice(-3),v:ppsf(priceOf(r.c),r.c.LivingArea),subject:false}));
-  items.push({label:"Subject",v:subjPPSF,subject:true});const max=Math.max(...items.map(i=>i.v))*1.08;
+  items.push({label:"Subject",v:subjPPSF,subject:true});const max=Math.max(...items.map(i=>i.v))*1.2;
   $('ppsf-bars').innerHTML=items.map(i=>`<div class="bar ${i.subject?'subject':''}"><div class="col" style="height:${(i.v/max*100).toFixed(1)}%"></div><div class="v">${fmt(i.v)}</div><div class="x">${i.label}</div></div>`).join("");
   const sold=COMPS.filter(c=>c.StandardStatus==="Closed");
   const avg=sold.length?sold.reduce((s,c)=>s+ppsf(priceOf(c),c.LivingArea),0)/sold.length:subjPPSF;

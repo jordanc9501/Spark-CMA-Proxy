@@ -131,6 +131,13 @@ export default async function handler(req, res) {
     const d = new Date(); d.setMonth(d.getMonth() - (+q.months));
     clauses.push(`CloseDate ge ${d.toISOString().slice(0, 10)}`);
   }
+  // explicit sold-date range (applies to Closed comps; current listings pass through)
+  if (q.dfrom || q.dto) {
+    const parts = [];
+    if (q.dfrom) parts.push(`CloseDate ge ${q.dfrom}`);
+    if (q.dto)   parts.push(`CloseDate le ${q.dto}`);
+    clauses.push(`(StandardStatus ne 'Closed' or (${parts.join(" and ")}))`);
+  }
 
   const top = Math.min(+q.top || 200, 200);
   const params = new URLSearchParams();
