@@ -90,13 +90,46 @@ export default async function handler(req, res) {
   if (!token) return res.status(500).json({ error: "SPARK_ACCESS_TOKEN not configured on the server." });
 
   const q = req.query;
-  const clauses = [];
 
-  // free-text subject lookup (address or MLS #)
-  if (q.q) {
-    const term = esc(q.q);
-    clauses.push(`(contains(UnparsedAddress,'${term}') or ListingId eq '${term}')`);
+  // helper: run a Spark query and map results
+  async function sparkFetch(filterStr, topN) {
+    const p = new URLSearchParams();
+    if (filterStr) p.set("$filter", filterStr);
+    p.set("$select", SELECT);
+    p.set("$expand", "Media($select=MediaURL,Order,MediaCategory)");
+    p.set("$top", String(topN));
+    p.set("$orderby", "ModificationTimestamp desc");
+    const r = await fetch(`${BASE}/Property?${p.toString()}`, { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" } });
+    if (!r.ok) { const t = await r.text(); const e = new Error("Spark " + r.status + ": " + t.slice(0, 300)); e.status = r.status; throw e; }
+    return ((await r.json()).value || []).map(mapRecord);
   }
+
+  // ---- subject lookup by address or MLS # (ignores the other filters) ----
+  if (q.q) {
+    const term = String(q.q).trim();
+    const digits = term.replace(/\D/g, "");
+    try {
+      let out = [];
+      if (digits.length >= 6 && !/[a-z]/i.test(term)) {
+        out = await sparkFetch(`ListingId eq '${esc(term)}'`, 5);
+      } else {
+        const num = (term.match(/\d+/) || [])[0];
+        if (num) {
+          try { out = await sparkFetch(`StreetNumberNumeric eq ${+num}`, 60); }
+          catch (_) { out = await sparkFetch(`StreetNumber eq '${esc(num)}'`, 60); }
+        }
+        const TYPES = ["e","w","n","s","st","rd","road","dr","drive","ln","lane","ave","avenue","way","ct","court","pl","place","blvd","pkwy","parkway","trail","cir","circle","az","arizona"];
+        const names = term.toLowerCase().replace(/[.,#]/g, " ").split(/\s+/).filter(w => w && !/^\d+$/.test(w) && !TYPES.includes(w));
+        if (names.length) out = out.filter(x => { const a = (x.UnparsedAddress || "").toLowerCase(); return names.every(w => a.includes(w)); });
+      }
+      res.setHeader("Cache-Control", "no-store");
+      return res.status(200).json({ count: out.length, value: out });
+    } catch (e) {
+      return res.status(e.status || 502).json({ error: "Lookup failed", detail: String(e.message || e) });
+    }
+  }
+
+  const clauses = [];
 
   // transaction type: sale vs lease (rental comps)
   if (q.ptype === "sale") clauses.push(`PropertyType eq 'Residential'`);
@@ -129,7 +162,7 @@ export default async function handler(req, res) {
   if (q.pool === "No") clauses.push(`PoolPrivateYN eq false`);
   if (q.months) {
     const d = new Date(); d.setMonth(d.getMonth() - (+q.months));
-    clauses.push(`CloseDate ge ${d.toISOString().slice(0, 10)}`);
+    clauses.push(`(StandardStatus ne 'Closed' or CloseDate ge ${d.toISOString().slice(0, 10)})`);
   }
   // explicit sold-date range (applies to Closed comps; current listings pass through)
   if (q.dfrom || q.dto) {

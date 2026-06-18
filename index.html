@@ -8,6 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Jost:wght@300;400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css">
 <style>
   :root{
     --bg:#0a0a0b; --bg-2:#121211; --bg-3:#16150f;
@@ -252,6 +253,7 @@
     <div class="map-col">
       <div id="map"></div>
       <div class="map-badge"><b id="map-count">0</b> properties · click a marker to select</div>
+      <button id="clear-boundary" class="hidden" style="position:absolute;top:14px;right:14px;z-index:600;background:var(--bronze-bar);color:#fff;border:1px solid var(--gold-l);border-radius:6px;padding:8px 14px;font:600 .72rem Jost,sans-serif;letter-spacing:.08em;text-transform:uppercase;cursor:pointer">Clear boundary</button>
       <div class="legend">
         <span><i style="background:#7aa35a"></i>Available</span>
         <span><i style="background:#b08d57"></i>Selected comp</span>
@@ -389,6 +391,7 @@
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
 <script>
 /* ============================================================================
    LIVE vs SAMPLE MODE
@@ -491,16 +494,17 @@ const statusBadge=s=>s==="Closed"?"badge-sold":s==="Pending"?"badge-pending":s==
 let subjectId=null;
 const selected=new Set();
 let visible=[];
-let bmap, markerLayer;
+let bmap, markerLayer, drawnItems=null, polygon=null;
+function inPoly(lat,lng,poly){let inside=false;for(let i=0,j=poly.length-1;i<poly.length;j=i++){const yi=poly[i][0],xi=poly[i][1],yj=poly[j][0],xj=poly[j][1];const hit=((yi>lat)!==(yj>lat))&&(lng<(xj-xi)*(lat-yi)/(yj-yi)+xi);if(hit)inside=!inside;}return inside;}
+function clearBoundary(){polygon=null;if(drawnItems)drawnItems.clearLayers();const b=$('clear-boundary');if(b)b.classList.add('hidden');applyFilters();}
 
 /* populate chip + select filter options from data */
 function initFilterOptions(){
-  const cities=[...new Set(LISTINGS.map(l=>l.City))];
-  $('f-city').innerHTML=cities.map(c=>`<span class="chip" data-v="${c}">${c}</span>`).join("");
-  const zips=[...new Set(LISTINGS.map(l=>l.PostalCode))].sort();
-  $('f-zip').innerHTML=zips.map(z=>`<span class="chip" data-v="${z}">${z}</span>`).join("");
-  $('f-dtype').innerHTML='<option value="">Any</option>'+[...new Set(LISTINGS.map(l=>l.DwellingType))].map(d=>`<option>${d}</option>`).join("");
-  $('f-style').innerHTML='<option value="">Any</option>'+[...new Set(LISTINGS.map(l=>l.DwellingStyle))].map(d=>`<option>${d}</option>`).join("");
+  const src = LIVE() ? [] : LISTINGS;   // live mode: options fill from real data after first fetch
+  $('f-city').innerHTML=[...new Set(src.map(l=>l.City))].sort().map(c=>`<span class="chip" data-v="${c}">${c}</span>`).join("");
+  $('f-zip').innerHTML=[...new Set(src.map(l=>l.PostalCode))].sort().map(z=>`<span class="chip" data-v="${z}">${z}</span>`).join("");
+  $('f-dtype').innerHTML='<option value="">Any</option>'+[...new Set(src.map(l=>l.DwellingType))].sort().map(d=>`<option>${d}</option>`).join("");
+  $('f-style').innerHTML='<option value="">Any</option>'+[...new Set(src.map(l=>l.DwellingStyle))].sort().map(d=>`<option>${d}</option>`).join("");
   document.querySelectorAll('.chips:not(#f-tx) .chip').forEach(c=>c.addEventListener('click',()=>{c.classList.toggle('on');applyFilters();}));
   // transaction toggle: single-select (Sale / Lease)
   document.querySelectorAll('#f-tx .chip').forEach(c=>c.addEventListener('click',()=>{
@@ -512,6 +516,17 @@ function initFilterOptions(){
   }));
 }
 const chipVals=id=>{const on=[...document.querySelectorAll('#'+id+' .chip.on')].map(c=>c.dataset.v);return on;};
+
+// in live mode, build filter option lists from the real data returned by the proxy
+const OPT={city:new Set(),zip:new Set(),dtype:new Set(),style:new Set()};
+function refreshFilterOptions(recs){
+  let changed=false;
+  recs.forEach(r=>{[['city',r.City],['zip',r.PostalCode],['dtype',r.DwellingType],['style',r.DwellingStyle]].forEach(([k,v])=>{if(v&&!OPT[k].has(v)){OPT[k].add(v);changed=true;}});});
+  if(!changed)return;
+  ['city','zip'].forEach(k=>{const on=chipVals('f-'+k);$('f-'+k).innerHTML=[...OPT[k]].sort().map(v=>`<span class="chip ${on.includes(v)?'on':''}" data-v="${v}">${v}</span>`).join("");});
+  ['dtype','style'].forEach(k=>{const cur=$('f-'+k).value;$('f-'+k).innerHTML='<option value="">Any</option>'+[...OPT[k]].sort().map(v=>`<option ${v===cur?'selected':''}>${v}</option>`).join("");});
+  document.querySelectorAll('#f-city .chip,#f-zip .chip').forEach(c=>c.onclick=()=>{c.classList.toggle('on');applyFilters();});
+}
 
 function passes(l){
   if(l.ListingId===subjectId) return false;
@@ -564,6 +579,7 @@ async function fetchLive(extra){
   const j=await r.json();
   const recs=j.value||[];
   mergeListings(recs);
+  refreshFilterOptions(recs);
   return recs;
 }
 /* ---- team login gate (free alternative to paid deployment protection) ---- */
@@ -578,6 +594,7 @@ async function applyFilters(){
   }else{
     visible=LISTINGS.filter(passes);
   }
+  if(polygon){ visible=visible.filter(p=>p.Latitude!=null && inPoly(p.Latitude,p.Longitude,polygon)); }
   $('res-count').textContent=visible.length.toLocaleString();
   $('map-count').textContent=visible.length.toLocaleString();
   renderList();
@@ -684,6 +701,23 @@ function initMap(){
   bmap=L.map('map',{scrollWheelZoom:true}).setView([33.535,-111.94],12);
   L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{attribution:'&copy; OpenStreetMap &copy; CARTO',maxZoom:19}).addTo(bmap);
   markerLayer=L.layerGroup().addTo(bmap);
+  // ---- draw-a-boundary search (polygon / rectangle) ----
+  if(typeof L.Control!=='undefined' && L.Control.Draw){
+    drawnItems=new L.FeatureGroup().addTo(bmap);
+    const dc=new L.Control.Draw({
+      position:'topright',
+      draw:{polygon:{shapeOptions:{color:'#c2a05c',weight:2,fillOpacity:.08}},rectangle:{shapeOptions:{color:'#c2a05c',weight:2,fillOpacity:.08}},marker:false,circle:false,circlemarker:false,polyline:false},
+      edit:{featureGroup:drawnItems,edit:false,remove:false}
+    });
+    bmap.addControl(dc);
+    bmap.on(L.Draw.Event.CREATED,e=>{
+      drawnItems.clearLayers(); drawnItems.addLayer(e.layer);
+      polygon=e.layer.getLatLngs()[0].map(p=>[p.lat,p.lng]);
+      $('clear-boundary').classList.remove('hidden');
+      applyFilters();
+    });
+  }
+  const cb=$('clear-boundary'); if(cb) cb.onclick=clearBoundary;
   setTimeout(()=>bmap.invalidateSize(),200);
   renderMarkers();
 }
