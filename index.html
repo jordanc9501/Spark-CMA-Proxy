@@ -84,6 +84,13 @@
   .subj .a{font-size:.86rem;color:#fff;font-weight:500;line-height:1.2}
   .subj .m{font-size:.72rem;color:var(--muted-d);margin-top:2px}
   .subj.empty{border-style:dashed;border-color:var(--line-d);justify-content:center;color:var(--muted-d);font-size:.82rem;padding:18px}
+  .subj-results{margin-top:6px;background:var(--bg-2);border:1px solid var(--line-d);border-radius:6px;overflow:hidden;max-height:280px;overflow-y:auto}
+  .subj-results .sr{padding:9px 11px;cursor:pointer;border-bottom:1px solid var(--line-d)}
+  .subj-results .sr:last-child{border-bottom:none}
+  .subj-results .sr:hover{background:var(--bg-3)}
+  .subj-results .sr b{display:block;color:#f3ecdd;font-weight:500;font-size:.84rem}
+  .subj-results .sr span{color:var(--muted-d);font-size:.73rem}
+  .subj-results .sr-empty{padding:10px 11px;color:var(--muted-d);font-size:.77rem;line-height:1.4}
 
   /* selected tray */
   .tray{display:flex;flex-wrap:wrap;gap:7px;margin-top:6px}
@@ -266,7 +273,8 @@
       <div class="sec">
         <h3>Subject Property</h3>
         <div class="hint">Type an address / MLS #, or click “Set subject” on any property.</div>
-        <input id="subj-input" placeholder="6024 E Naumann Dr, Paradise Valley">
+        <input id="subj-input" placeholder="Start typing an address or MLS #…" autocomplete="off">
+        <div id="subj-results" class="subj-results hidden"></div>
         <div id="subj-chosen" class="subj empty">No subject selected yet</div>
       </div>
 
@@ -682,19 +690,32 @@ $('reset').onclick=()=>{
   applyFilters();
 };
 ['f-pmin','f-pmax','f-beds','f-baths','f-sqmin','f-sqmax','f-ymin','f-ymax','f-garage','f-dist','f-months','f-dfrom','f-dto','f-dtype','f-style','f-levels','f-pool','f-cpool'].forEach(i=>$(i).addEventListener('change',applyFilters));
-$('subj-input').addEventListener('keydown',async e=>{if(e.key!=="Enter")return;
-  const raw=$('subj-input').value.trim();
-  if(LIVE()){
-    try{
-      const recs=await fetchLive({q:raw, top:5});
-      if(recs.length){ setSubject(recs[0].ListingId); }
-      else { $('subjnote').textContent="No match in ARMLS for that address/MLS #."; }
-    }catch(err){ console.error(err); $('subjnote').textContent="Live lookup failed — check proxy."; }
+let subjTimer;
+function renderSubjResults(recs){
+  const box=$('subj-results');
+  if(!recs || !recs.length){ box.innerHTML='<div class="sr-empty">No match. Try including the city, e.g. “6649 E Ocotillo, Paradise Valley”, or paste the MLS #.</div>'; box.classList.remove('hidden'); return; }
+  box.innerHTML=recs.slice(0,8).map(p=>`<div class="sr" data-id="${p.ListingId}"><b>${p.UnparsedAddress}</b><span>${money(priceOf(p))} · ${statusLabel(p.StandardStatus)}${p.LivingArea?' · '+p.LivingArea.toLocaleString()+' sf':''}</span></div>`).join("");
+  box.classList.remove('hidden');
+  box.querySelectorAll('.sr').forEach(el=>el.onclick=()=>{ setSubject(el.dataset.id); box.classList.add('hidden'); box.innerHTML=''; });
+}
+async function lookupSubject(v){
+  if(!LIVE()){
+    const q=v.toLowerCase();
+    renderSubjResults(LISTINGS.filter(l=>(l.UnparsedAddress+", "+l.City).toLowerCase().includes(q)||l.ListingId===v));
     return;
   }
-  const q=raw.toLowerCase();
-  const hit=LISTINGS.find(l=>(l.UnparsedAddress+", "+l.City).toLowerCase().includes(q)||l.ListingId===q);
-  if(hit)setSubject(hit.ListingId);});
+  try{ const recs=await fetchLive({q:v, top:8}); renderSubjResults(recs); }
+  catch(err){ console.error(err); renderSubjResults([]); }
+}
+$('subj-input').addEventListener('input',e=>{
+  clearTimeout(subjTimer);
+  const v=e.target.value.trim();
+  if(v.length<3){ $('subj-results').classList.add('hidden'); $('subj-results').innerHTML=''; return; }
+  $('subj-results').innerHTML='<div class="sr-empty">Searching…</div>'; $('subj-results').classList.remove('hidden');
+  subjTimer=setTimeout(()=>lookupSubject(v),350);
+});
+$('subj-input').addEventListener('keydown',e=>{ if(e.key==="Enter"){ clearTimeout(subjTimer); const v=e.target.value.trim(); if(v.length>=2) lookupSubject(v); } });
+document.addEventListener('click',e=>{ if(!e.target.closest('#subj-results') && e.target.id!=='subj-input'){ $('subj-results').classList.add('hidden'); } });
 
 /* init map */
 function initMap(){
