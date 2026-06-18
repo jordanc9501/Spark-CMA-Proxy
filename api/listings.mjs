@@ -34,12 +34,13 @@ const toMiles = (a, b) => {
   return 2 * R * Math.asin(Math.sqrt(s));
 };
 
-function pickPhoto(media) {
-  if (!Array.isArray(media) || !media.length) return "";
-  const photos = media
+function allPhotos(media) {
+  if (!Array.isArray(media) || !media.length) return [];
+  return media
     .filter(m => m && (m.MediaURL || m.MediaUrl) && (!m.MediaCategory || /photo|image/i.test(m.MediaCategory)))
-    .sort((a, b) => (a.Order ?? 99) - (b.Order ?? 99));
-  return photos.length ? (photos[0].MediaURL || photos[0].MediaUrl) : "";
+    .sort((a, b) => (a.Order ?? 99) - (b.Order ?? 99))
+    .map(m => m.MediaURL || m.MediaUrl)
+    .slice(0, 20);
 }
 
 function mapRecord(r) {
@@ -66,7 +67,8 @@ function mapRecord(r) {
     Longitude: r.Longitude ?? null,
     PropertyType: r.PropertyType || "",
     TransactionType: /lease|rent/i.test(r.PropertyType || "") ? "Lease" : "Sale",
-    Photo: pickPhoto(r.Media),
+    Photos: allPhotos(r.Media),
+    Photo: (allPhotos(r.Media)[0] || ""),
   };
 }
 
@@ -147,11 +149,7 @@ export default async function handler(req, res) {
   if (q.ptype === "sale") clauses.push(`PropertyType eq 'Residential'`);
   else if (q.ptype === "lease") clauses.push(`PropertyType eq 'Residential Lease'`);
 
-  // status (csv) — UI sends "Closed" for Sold already
-  if (q.status) {
-    const sts = q.status.split(",").map(s => `StandardStatus eq '${esc(s.trim())}'`);
-    if (sts.length) clauses.push(`(${sts.join(" or ")})`);
-  }
+  // (status handled per-status below so every selected status is well-represented, not crowded out by the per-query cap)
   if (q.city) {
     const c = q.city.split(",").map(s => `City eq '${esc(s.trim())}'`);
     if (c.length) clauses.push(`(${c.join(" or ")})`);
@@ -184,26 +182,22 @@ export default async function handler(req, res) {
     clauses.push(`(StandardStatus ne 'Closed' or (${parts.join(" and ")}))`);
   }
 
-  const top = Math.min(+q.top || 200, 200);
-  const params = new URLSearchParams();
-  if (clauses.length) params.set("$filter", clauses.join(" and "));
-  params.set("$select", SELECT);
-  params.set("$expand", "Media($select=MediaURL,Order,MediaCategory)");
-  params.set("$top", String(top));
-  params.set("$orderby", "ModificationTimestamp desc");
-
-  const url = `${BASE}/Property?${params.toString()}`;
+  const baseFilter = clauses.join(" and ");
+  const statuses = q.status ? q.status.split(",").map(s => s.trim()).filter(Boolean) : [];
 
   try {
-    const r = await fetch(url, {
-      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
-    });
-    if (!r.ok) {
-      const text = await r.text();
-      return res.status(r.status).json({ error: "Spark API error", status: r.status, detail: text.slice(0, 500) });
+    let out = [];
+    if (statuses.length) {
+      // fetch each selected status separately so none gets crowded out by the per-query cap
+      for (const st of statuses) {
+        const f = baseFilter ? `${baseFilter} and StandardStatus eq '${esc(st)}'` : `StandardStatus eq '${esc(st)}'`;
+        try { out = out.concat(await sparkFetch(f, 200)); } catch (_) {}
+      }
+      const seen = new Set();
+      out = out.filter(x => { if (!x.ListingId || seen.has(x.ListingId)) return false; seen.add(x.ListingId); return true; });
+    } else {
+      out = await sparkFetch(baseFilter, 200);
     }
-    const data = await r.json();
-    let out = (data.value || []).map(mapRecord);
 
     // post-fetch filters that OData can't do cleanly (collection / computed)
     if (q.style) out = out.filter(x => x.DwellingStyle === q.style);
