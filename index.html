@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CMA Builder — Phoenix Living</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Jost:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  :root{
+    --bg:#0a0a0b; --bg-2:#121211; --bg-3:#16150f;
+    --panel:#ffffff; --panel-2:#f7f4ee;
+    --ink:#1a1814; --muted:#8d877b; --muted-d:#9a948a;
+    --line:#e9e3d6; --line-d:#26241f;
+    --gold:#c2a05c; --gold-l:#e3cb93; --gold-d:#9a7a3f; --bronze:#b08d57;
+    --champagne:linear-gradient(100deg,#cda85f 0%,#e9d49a 50%,#bd934e 100%);
+    --bronze-bar:linear-gradient(90deg,#6f5631 0%,#b59561 48%,#7a5f37 100%);
+    --bronze-solid:#8a6c3c; --cream:#ece3d0;
+    --shadow:0 24px 60px rgba(10,9,6,.16);
+    --radius:6px; --good:#5d7d4f; --bad:#b06a4a;
+    --hdr:64px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Jost',sans-serif;color:var(--ink);background:var(--bg);line-height:1.55;-webkit-font-smoothing:antialiased}
+  h1,h2,h3,.head{font-family:'Cormorant Garamond',serif;font-weight:600;letter-spacing:.01em}
+  .gold-text{background:var(--champagne);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .eyebrow{font-size:.68rem;letter-spacing:.3em;text-transform:uppercase;font-weight:500;color:var(--gold)}
+  .hidden{display:none !important}
+
+  /* ===== HEADER ===== */
+  .hbar{height:var(--hdr);background:var(--bg);border-bottom:1px solid var(--line-d);display:flex;align-items:center;justify-content:space-between;padding:0 22px;gap:16px}
+  .hbar .l{display:flex;align-items:baseline;gap:16px;min-width:0}
+  .hbar h1{color:#fff;font-size:1.45rem;line-height:1}
+  .hbar .count{color:var(--gold-l);font-size:.85rem;letter-spacing:.04em;white-space:nowrap}
+  .hbar .count b{font-family:'Cormorant Garamond';font-size:1.15rem}
+  .hbar .r{display:flex;align-items:center;gap:14px}
+  .hbar .subjnote{color:var(--muted-d);font-size:.82rem;max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .hbar .subjnote b{color:#f3ecdd;font-weight:500}
+  .btn{display:inline-flex;align-items:center;gap:8px;justify-content:center;padding:10px 20px;border:none;border-radius:6px;background:var(--champagne);color:#231b0c;font-family:'Jost';font-weight:600;font-size:.8rem;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;transition:.2s;white-space:nowrap}
+  .btn:hover{filter:brightness(1.06)} .btn:disabled{opacity:.4;cursor:not-allowed}
+  .btn.ghost{background:transparent;border:1px solid var(--gold);color:var(--gold-l)}
+  .btn.sm{padding:7px 13px;font-size:.72rem}
+
+  /* ===== APP LAYOUT ===== */
+  .app{display:flex;height:calc(100vh - var(--hdr))}
+  .map-col{flex:1.7;position:relative;min-width:0}
+  #map{position:absolute;inset:0;background:#15140f}
+  .map-badge{position:absolute;top:14px;left:14px;z-index:500;background:rgba(10,10,11,.85);backdrop-filter:blur(8px);border:1px solid var(--line-d);border-radius:8px;padding:9px 14px;color:#efe9dd;font-size:.8rem}
+  .map-badge b{color:var(--gold-l);font-family:'Cormorant Garamond';font-size:1.05rem}
+  .legend{position:absolute;bottom:14px;left:14px;z-index:500;background:rgba(10,10,11,.85);backdrop-filter:blur(8px);border:1px solid var(--line-d);border-radius:8px;padding:10px 13px;color:#cfc7b6;font-size:.72rem;display:flex;gap:14px}
+  .legend i{display:inline-block;width:11px;height:11px;border-radius:999px;margin-right:5px;vertical-align:-1px}
+
+  .side{flex:1;max-width:430px;min-width:330px;background:var(--bg);border-left:1px solid var(--line-d);overflow-y:auto;display:flex;flex-direction:column}
+  @media(max-width:900px){.app{flex-direction:column;height:auto}.map-col{height:56vh;flex:none}.side{max-width:none;width:100%}}
+
+  .sec{padding:16px 18px;border-bottom:1px solid var(--line-d)}
+  .sec h3{color:#f3ecdd;font-size:1.15rem;margin-bottom:3px}
+  .sec .hint{font-size:.74rem;color:var(--muted-d);margin-bottom:10px}
+  label.fld{display:block;font-size:.62rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted-d);margin:11px 0 5px}
+  input,select{width:100%;background:var(--bg-3);border:1px solid var(--line-d);border-radius:5px;color:#f3ecdd;padding:8px 10px;font-family:'Jost';font-size:.86rem}
+  input:focus,select:focus{outline:none;border-color:var(--gold)}
+  select[multiple]{height:auto;min-height:74px}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+  .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px}
+  .chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:5px}
+  .chip{font-size:.72rem;padding:5px 11px;border-radius:999px;border:1px solid var(--line-d);background:var(--bg-3);color:#cfc7b6;cursor:pointer;user-select:none;transition:.15s}
+  .chip.on{background:var(--bronze-bar);color:#fff;border-color:transparent}
+
+  /* subject chosen */
+  .subj{display:flex;gap:11px;align-items:center;margin-top:11px;padding:10px;border:1px solid var(--gold);border-radius:var(--radius);background:rgba(194,160,92,.08)}
+  .subj .th{width:66px;height:50px;border-radius:4px;background-size:cover;background-position:center;flex:none}
+  .subj .a{font-size:.86rem;color:#fff;font-weight:500;line-height:1.2}
+  .subj .m{font-size:.72rem;color:var(--muted-d);margin-top:2px}
+  .subj.empty{border-style:dashed;border-color:var(--line-d);justify-content:center;color:var(--muted-d);font-size:.82rem;padding:18px}
+
+  /* selected tray */
+  .tray{display:flex;flex-wrap:wrap;gap:7px;margin-top:6px}
+  .tray .t{display:flex;align-items:center;gap:7px;background:var(--bg-2);border:1px solid var(--line-d);border-radius:999px;padding:4px 6px 4px 10px;font-size:.76rem;color:#e3ddcf}
+  .tray .t b{color:#fff;font-weight:500}
+  .tray .t button{border:none;background:#2c2920;color:#cba;border-radius:999px;width:18px;height:18px;cursor:pointer;font-size:.8rem;line-height:1}
+  .tray .none{color:var(--muted-d);font-size:.78rem}
+
+  /* filter accordion */
+  .facc>summary{list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;color:#f3ecdd;font-family:'Cormorant Garamond';font-size:1.1rem;padding:2px 0}
+  .facc>summary::-webkit-details-marker{display:none}
+  .facc>summary .car{color:var(--gold);transition:.2s}
+  .facc[open]>summary .car{transform:rotate(90deg)}
+
+  /* results list */
+  .rlist{display:flex;flex-direction:column;gap:10px}
+  .rrow{display:flex;gap:11px;background:var(--bg-2);border:1px solid var(--line-d);border-radius:var(--radius);padding:9px;transition:.15s;position:relative}
+  .rrow.sel{border-color:var(--gold);box-shadow:0 0 0 2px rgba(194,160,92,.22)}
+  .rrow .th{width:84px;height:64px;border-radius:4px;background-size:cover;background-position:center;flex:none;position:relative}
+  .rrow .sb{position:absolute;top:4px;left:4px;font-size:.52rem;letter-spacing:.08em;text-transform:uppercase;padding:3px 6px;border-radius:999px;color:#fff;font-weight:600}
+  .badge-sold{background:rgba(26,24,20,.9)}.badge-pending{background:rgba(194,160,92,.96)}.badge-active{background:rgba(120,150,90,.96)}.badge-coming{background:rgba(154,122,63,.96)}
+  .rrow .info{flex:1;min-width:0}
+  .rrow .price{font-family:'Cormorant Garamond';font-size:1.15rem;font-weight:600;color:#fff;line-height:1.1}
+  .rrow .addr{font-size:.78rem;color:#e3ddcf;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .rrow .meta{font-size:.7rem;color:var(--muted-d);margin-top:1px}
+  .rrow .acts{display:flex;gap:6px;margin-top:6px}
+  .rrow .acts button{font-size:.66rem;padding:5px 8px;border-radius:5px;cursor:pointer;font-family:'Jost';font-weight:500;border:1px solid var(--line-d);background:var(--bg-3);color:#cfc7b6;transition:.15s}
+  .rrow .acts .inc.on{background:var(--bronze-bar);color:#fff;border-color:transparent}
+  .rrow .acts .sub.on{background:var(--gold-l);color:#231b0c;border-color:transparent}
+  .empty-note{text-align:center;color:var(--muted-d);padding:26px;border:1px dashed var(--line-d);border-radius:var(--radius);font-size:.84rem}
+  .api-note{font-size:.72rem;color:var(--muted-d);background:var(--bg-2);border:1px solid var(--line-d);border-left:3px solid var(--gold);border-radius:5px;padding:10px 12px;line-height:1.55;margin-top:4px}
+  .api-note code{color:var(--gold-l);font-family:ui-monospace,monospace;font-size:.7rem}
+  /* leaflet popup */
+  .leaflet-popup-content{margin:10px 12px;font-family:'Jost'}
+  .pp .p{font-family:'Cormorant Garamond';font-size:1.2rem;font-weight:600}
+  .pp .a{font-size:.82rem;color:#333}.pp .m{font-size:.74rem;color:#777;margin:2px 0 8px}
+  .pp .b{display:flex;gap:6px}
+  .pp .b button{flex:1;font-size:.7rem;padding:6px 8px;border:1px solid #cbb88e;border-radius:5px;background:#fff;color:#7a5f37;cursor:pointer;font-family:'Jost';font-weight:500}
+  .pp .b button.gold{background:var(--bronze-solid);color:#fff;border-color:transparent}
+
+  /* ===== PRESENTATION (reused) ===== */
+  .pres{background:var(--panel-2)}
+  .pres section{padding:88px 0}
+  .pres .on-dark{background:var(--bg);color:#efe9dd}
+  .pres .wrap{max-width:1200px;margin:0 auto;padding:0 32px}
+  .pres .section-head{text-align:center;max-width:680px;margin:0 auto 50px}
+  .pres .section-head h2{font-size:2.7rem;margin:8px 0}
+  .pres .section-head p{color:var(--muted)} .pres .on-dark .section-head p{color:var(--muted-d)}
+  .pres .rule{width:54px;height:1px;background:var(--gold);margin:16px auto 0}
+  .topbar{position:sticky;top:0;z-index:60;background:rgba(10,10,11,.9);backdrop-filter:blur(12px);border-bottom:1px solid var(--line-d)}
+  .topbar .wrap{display:flex;align-items:center;justify-content:space-between;height:58px;max-width:1200px;margin:0 auto;padding:0 32px}
+  .topbar .back{background:transparent;border:1px solid var(--gold);color:var(--gold-l);border-radius:6px;padding:8px 16px;font-family:'Jost';font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;cursor:pointer}
+  .topbar .nm{color:#efe9dd;font-size:.82rem}.topbar .nm b{color:#fff;font-family:'Cormorant Garamond';font-size:1.05rem}
+  .hero{position:relative;height:76vh;min-height:540px;background:#000;overflow:hidden}
+  .slide{position:absolute;inset:0;opacity:0;transition:opacity 1s ease;pointer-events:none}
+  .slide.active{opacity:1;pointer-events:auto}
+  .slide .img{position:absolute;inset:0;background-size:cover;background-position:center;transform:scale(1.04);transition:transform 6s ease}
+  .slide.active .img{transform:scale(1)}
+  .slide .scrim{position:absolute;inset:0;background:linear-gradient(180deg,rgba(8,8,9,.45) 0%,rgba(8,8,9,.05) 32%,rgba(8,8,9,.2) 62%,rgba(8,8,9,.8) 100%)}
+  .hero-cap{position:absolute;left:0;right:0;bottom:148px;z-index:5}
+  .hero-cap .wrap .eyebrow{color:var(--gold-l)}
+  .hero-cap h1{font-family:'Cormorant Garamond';color:#fff;font-size:clamp(2rem,4.4vw,3.4rem);font-weight:600;line-height:1.05;margin-top:8px}
+  .hero-cap .s{color:#e2dccd;font-weight:300;font-size:1.02rem;margin-top:4px}
+  .arrow{position:absolute;top:46%;transform:translateY(-50%);z-index:6;width:50px;height:50px;border-radius:999px;background:rgba(20,18,14,.32);border:1px solid rgba(255,255,255,.35);cursor:pointer;display:grid;place-items:center;backdrop-filter:blur(4px)}
+  .arrow:hover{background:rgba(20,18,14,.6)} .arrow svg{width:20px;height:20px;stroke:#fff;fill:none;stroke-width:2}
+  .arrow.prev{left:22px}.arrow.next{right:22px}
+  .dots{position:absolute;left:0;right:0;bottom:126px;z-index:6;display:flex;gap:8px;justify-content:center}
+  .dots button{width:9px;height:9px;border-radius:999px;border:none;background:rgba(255,255,255,.45);cursor:pointer;transition:.25s}
+  .dots button.on{background:var(--gold-l);width:26px}
+  .statbar{position:absolute;left:0;right:0;bottom:0;z-index:5;background:var(--bronze-bar);display:grid;grid-template-columns:repeat(6,1fr)}
+  .statbar .s{display:flex;flex-direction:column;align-items:center;gap:7px;padding:18px 8px;border-left:1px solid rgba(255,255,255,.12)}
+  .statbar .s:first-child{border-left:none}
+  .statbar .tile{width:44px;height:44px;border-radius:8px;background:var(--cream);display:grid;place-items:center}
+  .statbar .tile svg{width:23px;height:23px;stroke:var(--gold-d);fill:none;stroke-width:1.5}
+  .statbar .v{font-family:'Cormorant Garamond';font-size:1.35rem;font-weight:600;color:#fff;text-align:center;line-height:1}
+  .statbar .l{font-size:.56rem;letter-spacing:.14em;text-transform:uppercase;color:#f0e6d2}
+  @media(max-width:820px){.statbar{grid-template-columns:repeat(3,1fr)}.statbar .s:nth-child(3n+1){border-left:none}.hero-cap{bottom:210px}.dots{bottom:192px}}
+  .ov-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:20px}
+  @media(max-width:1040px){.ov-grid{grid-template-columns:repeat(2,1fr)}}@media(max-width:560px){.ov-grid{grid-template-columns:1fr}}
+  .ocard{border-radius:var(--radius);overflow:hidden;background:#fff;box-shadow:0 12px 30px rgba(20,16,8,.07);border:1px solid var(--line)}
+  .ocard.subject{border:2px solid var(--gold);box-shadow:0 0 0 4px rgba(194,160,92,.18)}
+  .ocard .pbar{background:var(--bronze-bar);color:#fff;display:flex;align-items:center;justify-content:space-between;padding:9px 14px}
+  .ocard .pbar .p{font-family:'Cormorant Garamond';font-size:1.2rem;font-weight:600}
+  .ocard .ph{position:relative;aspect-ratio:16/10;background-size:cover;background-position:center}
+  .ocard .ph .addr{position:absolute;left:0;right:0;bottom:0;padding:24px 14px 10px;color:#fff;font-size:.79rem;font-weight:500;background:linear-gradient(180deg,transparent,rgba(8,8,9,.82))}
+  .ocard .feet{display:flex;gap:16px;background:#171511;color:#e9e1d0;padding:10px 14px;font-size:.8rem}
+  .ocard .feet .f{display:flex;align-items:center;gap:6px}.ocard .feet .f svg{width:15px;height:15px;stroke:var(--gold-l);fill:none;stroke-width:1.6}
+  .ocard .feet .f b{color:#fff;font-family:'Cormorant Garamond';font-size:1rem}
+  .tbl-scroll{overflow-x:auto;border-radius:var(--radius);border:1px solid var(--line)}
+  table.spec{border-collapse:collapse;width:100%;min-width:760px;font-size:.84rem;background:#fff}
+  table.spec th,table.spec td{padding:11px 15px;text-align:center;border-bottom:1px solid var(--line);white-space:nowrap}
+  table.spec thead th{padding:0;border:none;vertical-align:bottom}
+  table.spec .thumb{height:90px;background-size:cover;background-position:center;border-bottom:3px solid var(--bronze-solid)}
+  table.spec .thumb.subject{border-bottom:3px solid var(--gold)}
+  table.spec tbody th{background:var(--bronze-bar);color:#fff;text-align:left;font-weight:500;position:sticky;left:0;font-family:'Jost'}
+  table.spec td.subject-col{background:#faf5ea;font-weight:500}
+  table.spec tr:last-child td,table.spec tr:last-child th{border-bottom:none}
+  table.adj{border-collapse:collapse;width:100%;min-width:760px;font-size:.86rem;background:#fff}
+  table.adj th,table.adj td{padding:13px 16px;text-align:right;border-bottom:1px solid var(--line)}
+  table.adj th:first-child,table.adj td:first-child{text-align:left}
+  table.adj thead th{font-family:'Jost';font-weight:500;font-size:.64rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);background:var(--panel-2)}
+  table.adj tbody tr:last-child td{border-bottom:none}
+  table.adj td.subject-col{background:#faf5ea;font-weight:500}table.adj th.subject-col{background:#f3ead5;color:var(--gold-d)}
+  .adj-pos{color:var(--good)}.adj-neg{color:var(--bad)}
+  table.adj tr.total-row td{border-top:2px solid var(--gold-l);background:#faf5ea;font-family:'Cormorant Garamond';font-size:1.2rem;font-weight:600}
+  .note{font-size:.78rem;color:var(--muted-d);margin-top:14px;font-style:italic}
+  .mkt-grid{display:grid;grid-template-columns:1.15fr .85fr;gap:50px;align-items:center}
+  @media(max-width:880px){.mkt-grid{grid-template-columns:1fr;gap:36px}}
+  .bars{display:flex;align-items:flex-end;gap:12px;height:250px;padding-top:10px}
+  .bar{flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;height:100%}
+  .bar .col{width:100%;background:linear-gradient(180deg,#7a5f37,#5a4527);border-radius:4px 4px 0 0;transition:height .8s ease}
+  .bar.subject .col{background:var(--champagne)}
+  .bar .v{font-family:'Cormorant Garamond';font-size:.85rem;font-weight:600;color:#fff}
+  .bar .x{font-size:.58rem;color:var(--muted-d);letter-spacing:.04em;text-transform:uppercase;text-align:center}
+  .mkt-stats{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .mkt-stats .m{background:var(--bg-2);border:1px solid var(--line-d);border-radius:var(--radius);padding:22px}
+  .mkt-stats .m .n{font-family:'Cormorant Garamond';font-size:2rem;font-weight:600;color:#f3ecdd;line-height:1}
+  .mkt-stats .m .l{font-size:.62rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted-d);margin-top:7px}
+  #pmap{height:420px;border-radius:var(--radius);border:1px solid var(--line-d);background:#15140f}
+  .map-note{text-align:center;color:var(--muted-d);font-size:.85rem;margin-top:12px}
+  .reco{position:relative;background:var(--bg);color:#fff;text-align:center;overflow:hidden}
+  .reco::before{content:"";position:absolute;inset:0;background:radial-gradient(900px 420px at 50% -10%,rgba(194,160,92,.22),transparent 70%)}
+  .reco .wrap{position:relative}
+  .reco h2{font-size:2.7rem;margin:10px 0 4px}
+  .reco .range{font-family:'Cormorant Garamond';font-size:clamp(1.9rem,5.2vw,3.6rem);font-weight:600;margin:18px 0 8px;white-space:nowrap;letter-spacing:.005em}
+  @media(max-width:600px){.reco .range{white-space:normal}}
+  .reco .target{font-size:1.04rem;color:#cabfa6}.reco .target b{color:#fff;font-weight:500}
+  .meter{max-width:660px;margin:42px auto 0}
+  .meter .track{height:8px;border-radius:999px;background:linear-gradient(90deg,#2a2720,#9a7a3f,#e9d49a,#9a7a3f,#2a2720);position:relative}
+  .meter .pin{position:absolute;top:-7px;width:3px;height:22px;border-radius:4px;background:#fff;box-shadow:0 0 0 4px rgba(255,255,255,.16)}
+  .meter .labels{display:flex;justify-content:space-between;margin-top:14px;font-size:.8rem;color:#a59f93}
+  .pres footer{background:#070707;color:#9b958a;text-align:center;padding:60px 0}
+  .pres footer .agent b{color:#fff;font-weight:500}
+  .pres footer .tiny{margin-top:22px;font-size:.72rem;color:#615c52;max-width:660px;margin:22px auto 0;line-height:1.7}
+</style>
+</head>
+<body>
+
+<!-- ============================= BUILDER VIEW ============================= -->
+<div id="builder">
+  <div class="hbar">
+    <div class="l">
+      <h1>CMA Builder</h1>
+      <div class="count">View Results: <b id="res-count">0</b></div>
+    </div>
+    <div class="r">
+      <div class="subjnote" id="subjnote">No subject selected</div>
+      <button class="btn" id="generate" disabled>Generate CMA →</button>
+    </div>
+  </div>
+
+  <div class="app">
+    <!-- MAP -->
+    <div class="map-col">
+      <div id="map"></div>
+      <div class="map-badge"><b id="map-count">0</b> properties · click a marker to select</div>
+      <div class="legend">
+        <span><i style="background:#7aa35a"></i>Available</span>
+        <span><i style="background:#b08d57"></i>Selected comp</span>
+        <span><i style="background:#e3cb93"></i>Subject</span>
+      </div>
+    </div>
+
+    <!-- SIDE PANEL -->
+    <div class="side">
+      <div class="sec">
+        <h3>Subject Property</h3>
+        <div class="hint">Type an address / MLS #, or click “Set subject” on any property.</div>
+        <input id="subj-input" placeholder="6024 E Naumann Dr, Paradise Valley">
+        <div id="subj-chosen" class="subj empty">No subject selected yet</div>
+      </div>
+
+      <div class="sec">
+        <h3 style="font-size:1.05rem">Selected Comparables <span id="sel-n" style="color:var(--gold-l)"></span></h3>
+        <div class="tray" id="tray"><span class="none">None yet — add at least 2.</span></div>
+      </div>
+
+      <div class="sec">
+        <details class="facc" open>
+          <summary><span>Filters</span><span class="car">›</span></summary>
+          <div style="margin-top:12px">
+            <label class="fld">Transaction</label>
+            <div class="chips" id="f-tx">
+              <span class="chip on" data-v="sale">For Sale</span>
+              <span class="chip" data-v="lease">For Lease</span>
+            </div>
+
+            <label class="fld">Status</label>
+            <div class="chips" id="f-status">
+              <span class="chip on" data-v="Active">Active</span>
+              <span class="chip on" data-v="Coming Soon">Coming Soon</span>
+              <span class="chip on" data-v="Pending">Pending</span>
+              <span class="chip on" data-v="Closed">Sold</span>
+            </div>
+
+            <label class="fld" id="lbl-price">List / Sale Price</label>
+            <div class="row2"><input id="f-pmin" type="number" placeholder="Min $"><input id="f-pmax" type="number" placeholder="Max $"></div>
+
+            <label class="fld">City</label>
+            <div class="chips" id="f-city"></div>
+
+            <label class="fld">Zip Code</label>
+            <div class="chips" id="f-zip"></div>
+
+            <div class="row2">
+              <div><label class="fld">Dwelling Type</label><select id="f-dtype"></select></div>
+              <div><label class="fld">Dwelling Style</label><select id="f-style"></select></div>
+            </div>
+
+            <div class="row3">
+              <div><label class="fld">Min Beds</label><input id="f-beds" type="number" placeholder="Any"></div>
+              <div><label class="fld">Min Baths</label><input id="f-baths" type="number" placeholder="Any"></div>
+              <div><label class="fld">Interior Lvls</label><select id="f-levels"><option value="">Any</option><option>1</option><option>2</option></select></div>
+            </div>
+
+            <label class="fld">Approx SQFT</label>
+            <div class="row2"><input id="f-sqmin" type="number" placeholder="Min"><input id="f-sqmax" type="number" placeholder="Max"></div>
+
+            <label class="fld">Year Built</label>
+            <div class="row2"><input id="f-ymin" type="number" placeholder="From"><input id="f-ymax" type="number" placeholder="To"></div>
+
+            <div class="row3">
+              <div><label class="fld">Private Pool</label><select id="f-pool"><option value="">Any</option><option>Yes</option><option>No</option></select></div>
+              <div><label class="fld">Comm. Pool</label><select id="f-cpool"><option value="">Any</option><option>Yes</option><option>No</option></select></div>
+              <div><label class="fld">Min Garage</label><input id="f-garage" type="number" placeholder="Any"></div>
+            </div>
+
+            <div class="row2">
+              <div><label class="fld">Max Dist (mi)</label><input id="f-dist" type="number" step="0.1" placeholder="Any"></div>
+              <div><label class="fld">Sold within (mo)</label><input id="f-months" type="number" placeholder="Any"></div>
+            </div>
+
+            <div style="display:flex;gap:9px;margin-top:14px">
+              <button class="btn sm" id="apply" style="flex:1">Apply Filters</button>
+              <button class="btn ghost sm" id="reset" style="flex:1">Reset</button>
+            </div>
+            <div class="api-note" style="margin-top:12px">Live: <code>Apply</code> POSTs these to your Spark proxy, which queries <code>/Reso/OData/Property</code> with your secret token. Here it filters built-in sample listings identically.</div>
+          </div>
+        </details>
+      </div>
+
+      <div class="sec" style="flex:1">
+        <h3 style="font-size:1.05rem">Results</h3>
+        <div class="hint" id="list-hint"></div>
+        <div class="rlist" id="rlist"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================ PRESENTATION VIEW ========================= -->
+<div id="presentation" class="pres hidden">
+  <div class="topbar"><div class="wrap">
+    <button class="back" id="back">← Back to Builder</button>
+    <div class="nm">Comparative Market Analysis · <b id="pv-addr">—</b></div>
+  </div></div>
+  <section class="hero" id="hero" style="padding:0">
+    <div id="slides"></div>
+    <button class="arrow prev" id="prev"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button>
+    <button class="arrow next" id="next"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button>
+    <div class="dots" id="dots"></div>
+  </section>
+  <section id="overview"><div class="wrap">
+    <div class="section-head"><div class="eyebrow">Comparative Market Analysis</div><h2>Listing Overview</h2><div class="rule"></div></div>
+    <div class="ov-grid" id="ov-grid"></div></div></section>
+  <section id="details" style="background:var(--panel-2)"><div class="wrap">
+    <div class="section-head"><div class="eyebrow">Side by Side</div><h2>Listing Details</h2><div class="rule"></div></div>
+    <div class="tbl-scroll"><table class="spec" id="spec-table"></table></div></div></section>
+  <section id="analysis" class="on-dark"><div class="wrap">
+    <div class="section-head"><div class="eyebrow">Line-Item Reconciliation</div><h2>Adjusted Comparison</h2>
+      <p>Each comparable adjusted to the subject for measurable differences, producing an indicated value.</p></div>
+    <div class="tbl-scroll" style="border-color:var(--line)"><table class="adj" id="adj-table"></table></div>
+    <p class="note" id="adj-note"></p></div></section>
+  <section id="market"><div class="wrap">
+    <div class="section-head"><div class="eyebrow">Market Context</div><h2 style="color:var(--ink)">Price Per Square Foot</h2><div class="rule"></div></div>
+    <div class="mkt-grid"><div class="bars" id="ppsf-bars"></div><div class="mkt-stats" id="market-stats"></div></div></div></section>
+  <section id="map-sec" style="background:var(--panel-2)"><div class="wrap">
+    <div class="section-head"><div class="eyebrow">Geography</div><h2>Listing Map</h2><div class="rule"></div></div>
+    <div id="pmap"></div><div class="map-note" id="map-note"></div></div></section>
+  <section class="reco" id="reco"><div class="wrap">
+    <div class="eyebrow">Recommended Positioning</div><h2>Suggested List Price</h2>
+    <div class="range gold-text" id="reco-range">—</div>
+    <div class="target">Target list price: <b id="reco-target">—</b> · Indicated value from adjusted comps</div>
+    <div class="meter"><div class="track"><div class="pin" id="reco-pin" style="left:50%"></div></div>
+      <div class="labels"><span id="reco-low">—</span><span id="reco-high">—</span></div></div></div></section>
+  <footer><div class="agent">Prepared by <b>Jordan Cohen</b> · jordan@jcluxuryresidential.com</div>
+    <div class="tiny" id="pv-disclaimer"></div></footer>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+/* ============================================================================
+   LIVE vs SAMPLE MODE
+   ----------------------------------------------------------------------------
+   To go live with real ARMLS data, deploy the proxy in /spark-proxy (see its
+   README) and paste its URL below. The proxy holds your Spark token server-side;
+   it is NEVER placed in this file. Leave SPARK_PROXY as "" to use sample data.
+   ========================================================================== */
+const CONFIG = { SPARK_PROXY: "/api/listings" };   // same-origin when hosted on Vercel
+const LIVE = () => !!CONFIG.SPARK_PROXY;
+
+/* ============================================================================
+   SAMPLE ARMLS DATA (RESO Data Dictionary 2.0 field names) — used when SPARK_PROXY is "".
+   ========================================================================== */
+const PHOTOS=[
+ "https://images.unsplash.com/photo-1613490493576-7fde63acd811?auto=format&fit=crop&w=1500&q=80",
+ "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?auto=format&fit=crop&w=1400&q=80",
+ "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1400&q=80",
+ "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=1400&q=80",
+ "https://images.unsplash.com/photo-1605276374104-dee2a0ed3cd6?auto=format&fit=crop&w=1400&q=80",
+ "https://images.unsplash.com/photo-1564013799919-ab600027ffc6?auto=format&fit=crop&w=1400&q=80",
+ "https://images.unsplash.com/photo-1567496898669-ee935f5f647a?auto=format&fit=crop&w=1400&q=80",
+ "https://images.unsplash.com/photo-1580587771525-78b9dba3b914?auto=format&fit=crop&w=1400&q=80",
+];
+const ph=i=>PHOTOS[((i%PHOTOS.length)+PHOTOS.length)%PHOTOS.length];
+
+// seeded RNG for stable sample data
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+const rnd=mulberry32(20260616);
+const pick=arr=>arr[Math.floor(rnd()*arr.length)];
+const between=(a,b)=>a+rnd()*(b-a);
+
+const CITIES=[["Paradise Valley",["85253"],[33.531,-111.943]],
+              ["Scottsdale",["85250","85251","85258"],[33.553,-111.918]],
+              ["Phoenix",["85018","85016"],[33.503,-111.985]]];
+const DTYPES=["Single Family - Detached","Patio Home","Townhouse","Gemini/Twin Home"];
+const STYLES=["Contemporary/Modern","Santa Barbara/Tuscan","Spanish","Ranch","Territorial/Santa Fe"];
+const STREETS=["E Mockingbird Ln","N Hummingbird Ln","E Stallion Rd","N Casa Blanca Dr","E Arabian Way","N Invergordon Rd","E Doubletree Ranch Rd","E Cholla Ln","E Sahuaro Dr","N Quartz Mountain Rd","E Lincoln Dr","N Mummy Mountain Rd","E Solano Dr","E Berridge Ln","N 68th St","E Calle del Norte","E Orange Dr","N Saddleback Trail"];
+
+// hand-authored luxury PV comps (good subject + comps)
+const NAMED=[
+ {ListingId:"6724001",UnparsedAddress:"6024 E Naumann Dr",City:"Paradise Valley",PostalCode:"85253",StandardStatus:"Active",ListPrice:11995000,ClosePrice:null,CloseDate:null,LivingArea:8223,BedroomsTotal:6,BathroomsTotalInteger:8,GarageSpaces:5,PrivatePool:true,CommunityPool:false,LotSizeAcres:1.50,YearBuilt:2025,Stories:1,DwellingType:"Single Family - Detached",DwellingStyle:"Contemporary/Modern",Latitude:33.5312,Longitude:-111.9426},
+ {ListingId:"6724002",UnparsedAddress:"7138 N Clearwater Pkwy",City:"Paradise Valley",PostalCode:"85253",StandardStatus:"Closed",ListPrice:11650000,ClosePrice:11250000,CloseDate:"2026-04-22",LivingArea:7800,BedroomsTotal:6,BathroomsTotalInteger:7,GarageSpaces:4,PrivatePool:true,CommunityPool:false,LotSizeAcres:1.40,YearBuilt:2024,Stories:2,DwellingType:"Single Family - Detached",DwellingStyle:"Santa Barbara/Tuscan",Latitude:33.5358,Longitude:-111.9521},
+ {ListingId:"6724003",UnparsedAddress:"5402 E Desert Jewel Dr",City:"Paradise Valley",PostalCode:"85253",StandardStatus:"Closed",ListPrice:13950000,ClosePrice:13500000,CloseDate:"2026-03-09",LivingArea:9100,BedroomsTotal:7,BathroomsTotalInteger:9,GarageSpaces:5,PrivatePool:true,CommunityPool:false,LotSizeAcres:1.80,YearBuilt:2025,Stories:1,DwellingType:"Single Family - Detached",DwellingStyle:"Contemporary/Modern",Latitude:33.5261,Longitude:-111.9602},
+ {ListingId:"6724004",UnparsedAddress:"6809 E Cheney Dr",City:"Paradise Valley",PostalCode:"85253",StandardStatus:"Pending",ListPrice:12400000,ClosePrice:null,CloseDate:null,LivingArea:8400,BedroomsTotal:6,BathroomsTotalInteger:8,GarageSpaces:5,PrivatePool:true,CommunityPool:false,LotSizeAcres:1.55,YearBuilt:2025,Stories:1,DwellingType:"Single Family - Detached",DwellingStyle:"Contemporary/Modern",Latitude:33.5389,Longitude:-111.9385},
+ {ListingId:"6724005",UnparsedAddress:"4720 E Royal Palm Rd",City:"Paradise Valley",PostalCode:"85253",StandardStatus:"Active",ListPrice:13950000,ClosePrice:null,CloseDate:null,LivingArea:8900,BedroomsTotal:7,BathroomsTotalInteger:8,GarageSpaces:6,PrivatePool:true,CommunityPool:false,LotSizeAcres:1.90,YearBuilt:2025,Stories:2,DwellingType:"Single Family - Detached",DwellingStyle:"Santa Barbara/Tuscan",Latitude:33.5447,Longitude:-111.9663},
+ {ListingId:"6724006",UnparsedAddress:"5810 E Naumann Dr",City:"Paradise Valley",PostalCode:"85253",StandardStatus:"Closed",ListPrice:10995000,ClosePrice:10650000,CloseDate:"2026-02-14",LivingArea:7400,BedroomsTotal:5,BathroomsTotalInteger:6,GarageSpaces:4,PrivatePool:true,CommunityPool:false,LotSizeAcres:1.25,YearBuilt:2023,Stories:1,DwellingType:"Single Family - Detached",DwellingStyle:"Spanish",Latitude:33.5298,Longitude:-111.9461},
+ {ListingId:"6724007",UnparsedAddress:"6610 N Mountain View Dr",City:"Paradise Valley",PostalCode:"85253",StandardStatus:"Closed",ListPrice:10800000,ClosePrice:10500000,CloseDate:"2026-01-19",LivingArea:8363,BedroomsTotal:5,BathroomsTotalInteger:8,GarageSpaces:4,PrivatePool:true,CommunityPool:false,LotSizeAcres:1.30,YearBuilt:2022,Stories:2,DwellingType:"Single Family - Detached",DwellingStyle:"Santa Barbara/Tuscan",Latitude:33.5421,Longitude:-111.9498},
+ {ListingId:"6724008",UnparsedAddress:"5131 E Butler Dr",City:"Paradise Valley",PostalCode:"85253",StandardStatus:"Pending",ListPrice:12295000,ClosePrice:null,CloseDate:null,LivingArea:8693,BedroomsTotal:7,BathroomsTotalInteger:9,GarageSpaces:5,PrivatePool:true,CommunityPool:false,LotSizeAcres:1.62,YearBuilt:2024,Stories:1,DwellingType:"Single Family - Detached",DwellingStyle:"Contemporary/Modern",Latitude:33.5337,Longitude:-111.9574},
+];
+NAMED.forEach((l,i)=>l.Photo=ph(i));
+
+// generate additional listings to populate the map
+const GEN=[];
+for(let i=0;i<46;i++){
+  const [city,zips,c]=pick(CITIES);
+  const lat=c[0]+between(-0.045,0.045), lon=c[1]+between(-0.06,0.06);
+  const luxury = city==="Paradise Valley";
+  const sqft=Math.round(between(luxury?5200:3200, luxury?9500:7200)/10)*10;
+  const ppsfBase=between(luxury?1150:680, luxury?1650:980);
+  let price=Math.round(sqft*ppsfBase/5000)*5000;
+  const status=pick(["Active","Active","Pending","Closed","Closed","Coming Soon"]);
+  let close=null,cd=null;
+  if(status==="Closed"){close=Math.round(price*between(0.95,0.99)/5000)*5000;
+    const dt=new Date(); dt.setMonth(dt.getMonth()-Math.floor(between(0,16))); cd=dt.toISOString().slice(0,10);}
+  GEN.push({ListingId:"69"+(10000+i),
+    UnparsedAddress:(Math.floor(between(40,99))*100+Math.floor(between(0,99)))+" "+pick(STREETS),
+    City:city,PostalCode:pick(zips),StandardStatus:status,ListPrice:price,ClosePrice:close,CloseDate:cd,
+    LivingArea:sqft,BedroomsTotal:Math.floor(between(4,8)),BathroomsTotalInteger:Math.floor(between(4,9)),
+    GarageSpaces:Math.floor(between(2,6)),PrivatePool:rnd()>0.18,CommunityPool:rnd()>0.7,
+    LotSizeAcres:+between(0.6,2.1).toFixed(2),YearBuilt:Math.floor(between(2004,2027)),Stories:rnd()>0.5?1:2,
+    DwellingType:pick(DTYPES),DwellingStyle:pick(STYLES),Latitude:+lat.toFixed(5),Longitude:+lon.toFixed(5),Photo:ph(i+3)});
+}
+const LISTINGS=[...NAMED,...GEN];
+
+const ADJ={perSqFt:850,perBedroom:75000,perBathroom:60000,perGarageStall:40000,pool:150000,perAcreLot:1200000};
+// monthly-rent adjustment model used for lease (rental) comps
+const ADJ_LEASE={perSqFt:0.45,perBedroom:400,perBathroom:300,perGarageStall:150,pool:600,perAcreLot:3000};
+
+/* helpers */
+const $=id=>document.getElementById(id);
+const fmt=n=>"$"+Math.round(n).toLocaleString("en-US");
+const ppsf=(p,a)=>p/a;
+const priceOf=c=>c.ClosePrice??c.ListPrice;
+const acresToSf=a=>Math.round(a*43560).toLocaleString("en-US");
+const monthsAgo=d=>{if(!d)return 0;return (new Date()-new Date(d))/(1000*60*60*24*30.4);};
+function haversine(a,b){const R=3958.8,toR=x=>x*Math.PI/180;const dLat=toR(b.Latitude-a.Latitude),dLon=toR(b.Longitude-a.Longitude);
+  const s=Math.sin(dLat/2)**2+Math.cos(toR(a.Latitude))*Math.cos(toR(b.Latitude))*Math.sin(dLon/2)**2;return 2*R*Math.asin(Math.sqrt(s));}
+// transaction-aware context (sale vs lease)
+let LEASECTX=false;
+const txMode=()=>document.querySelector('#f-tx .chip.on')?.dataset.v||'sale';
+const money=n=>LEASECTX?fmt(n)+"/mo":fmt(n);            // full numbers, never abbreviated
+const ppsfTxt=v=>LEASECTX?fmt(v)+"/sf·mo":fmt(v)+"/sf";
+const L=(saleTxt,leaseTxt)=>LEASECTX?leaseTxt:saleTxt;
+const activeAdj=()=>LEASECTX?ADJ_LEASE:ADJ;
+const statusLabel=s=>s==="Closed"?(LEASECTX?"Leased":"Sold"):s;
+const statusBadge=s=>s==="Closed"?"badge-sold":s==="Pending"?"badge-pending":s==="Coming Soon"?"badge-coming":"badge-active";
+
+/* ====== STATE ====== */
+let subjectId=null;
+const selected=new Set();
+let visible=[];
+let bmap, markerLayer;
+
+/* populate chip + select filter options from data */
+function initFilterOptions(){
+  const cities=[...new Set(LISTINGS.map(l=>l.City))];
+  $('f-city').innerHTML=cities.map(c=>`<span class="chip" data-v="${c}">${c}</span>`).join("");
+  const zips=[...new Set(LISTINGS.map(l=>l.PostalCode))].sort();
+  $('f-zip').innerHTML=zips.map(z=>`<span class="chip" data-v="${z}">${z}</span>`).join("");
+  $('f-dtype').innerHTML='<option value="">Any</option>'+[...new Set(LISTINGS.map(l=>l.DwellingType))].map(d=>`<option>${d}</option>`).join("");
+  $('f-style').innerHTML='<option value="">Any</option>'+[...new Set(LISTINGS.map(l=>l.DwellingStyle))].map(d=>`<option>${d}</option>`).join("");
+  document.querySelectorAll('.chips:not(#f-tx) .chip').forEach(c=>c.addEventListener('click',()=>{c.classList.toggle('on');applyFilters();}));
+  // transaction toggle: single-select (Sale / Lease)
+  document.querySelectorAll('#f-tx .chip').forEach(c=>c.addEventListener('click',()=>{
+    document.querySelectorAll('#f-tx .chip').forEach(x=>x.classList.remove('on'));
+    c.classList.add('on');
+    const sc=document.querySelector('#f-status .chip[data-v="Closed"]'); if(sc) sc.textContent = txMode()==='lease'?'Leased':'Sold';
+    const pl=document.getElementById('lbl-price'); if(pl) pl.textContent = txMode()==='lease'?'Monthly Rent':'List / Sale Price';
+    applyFilters();
+  }));
+}
+const chipVals=id=>{const on=[...document.querySelectorAll('#'+id+' .chip.on')].map(c=>c.dataset.v);return on;};
+
+function passes(l){
+  if(l.ListingId===subjectId) return false;
+  const st=chipVals('f-status'); if(st.length && !st.includes(l.StandardStatus)) return false;
+  const cities=chipVals('f-city'); if(cities.length && !cities.includes(l.City)) return false;
+  const zips=chipVals('f-zip'); if(zips.length && !zips.includes(l.PostalCode)) return false;
+  const pmin=+$('f-pmin').value||0, pmax=+$('f-pmax').value||Infinity, pr=priceOf(l);
+  if(pr<pmin||pr>pmax) return false;
+  const dt=$('f-dtype').value; if(dt && l.DwellingType!==dt) return false;
+  const sty=$('f-style').value; if(sty && l.DwellingStyle!==sty) return false;
+  if(l.BedroomsTotal<(+$('f-beds').value||0)) return false;
+  if(l.BathroomsTotalInteger<(+$('f-baths').value||0)) return false;
+  const lv=$('f-levels').value; if(lv && String(l.Stories)!==lv) return false;
+  if(l.LivingArea<(+$('f-sqmin').value||0)) return false;
+  if(l.LivingArea>(+$('f-sqmax').value||Infinity)) return false;
+  if(l.YearBuilt<(+$('f-ymin').value||0)) return false;
+  if(l.YearBuilt>(+$('f-ymax').value||9999)) return false;
+  const pool=$('f-pool').value; if(pool==="Yes"&&!l.PrivatePool) return false; if(pool==="No"&&l.PrivatePool) return false;
+  const cp=$('f-cpool').value; if(cp==="Yes"&&!l.CommunityPool) return false; if(cp==="No"&&l.CommunityPool) return false;
+  if(l.GarageSpaces<(+$('f-garage').value||0)) return false;
+  const subj=LISTINGS.find(x=>x.ListingId===subjectId);
+  if(subj){const md=+$('f-dist').value; if(md && haversine(subj,l)>md) return false;}
+  if(l.StandardStatus==="Closed"){const mo=+$('f-months').value; if(mo && monthsAgo(l.CloseDate)>mo) return false;}
+  return true;
+}
+
+function liveParams(extra){
+  const p=new URLSearchParams();
+  p.set('ptype', txMode());
+  const csv=(id)=>{const v=chipVals(id);if(v.length)return v.join(",");return "";};
+  if(csv('f-status'))p.set('status',csv('f-status'));
+  if(csv('f-city'))p.set('city',csv('f-city'));
+  if(csv('f-zip'))p.set('zip',csv('f-zip'));
+  [['pmin','f-pmin'],['pmax','f-pmax'],['beds','f-beds'],['baths','f-baths'],['sqmin','f-sqmin'],['sqmax','f-sqmax'],
+   ['ymin','f-ymin'],['ymax','f-ymax'],['garage','f-garage'],['dist','f-dist'],['months','f-months']]
+   .forEach(([k,id])=>{const v=$(id).value;if(v)p.set(k,v);});
+  ['dtype','style','levels','pool','cpool'].forEach(k=>{const v=$('f-'+k).value;if(v)p.set(k,v);});
+  const subj=LISTINGS.find(l=>l.ListingId===subjectId);
+  if(subj&&subj.Latitude!=null){p.set('lat',subj.Latitude);p.set('lon',subj.Longitude);}
+  if(extra)for(const k in extra)p.set(k,extra[k]);
+  return p.toString();
+}
+function mergeListings(recs){recs.forEach(r=>{const i=LISTINGS.findIndex(l=>l.ListingId===r.ListingId);if(i>=0)LISTINGS[i]=r;else LISTINGS.push(r);});}
+async function fetchLive(extra){
+  const r=await fetch(CONFIG.SPARK_PROXY+'?'+liveParams(extra));
+  if(!r.ok)throw new Error('proxy '+r.status);
+  const j=await r.json();
+  const recs=j.value||[];
+  mergeListings(recs);
+  return recs;
+}
+async function applyFilters(){
+  LEASECTX = txMode()==='lease';
+  if(LIVE()){
+    try{ visible=await fetchLive(); $('list-hint').dataset.err=""; }
+    catch(e){ visible=[]; $('list-hint').textContent="Live fetch failed — check the proxy URL / CORS / token."; console.error(e); }
+  }else{
+    visible=LISTINGS.filter(passes);
+  }
+  $('res-count').textContent=visible.length.toLocaleString();
+  $('map-count').textContent=visible.length.toLocaleString();
+  renderList();
+  renderMarkers();
+}
+
+function renderList(){
+  const subj=LISTINGS.find(l=>l.ListingId===subjectId);
+  const list=$('rlist');
+  $('list-hint').textContent=visible.length+" match current filters";
+  if(!visible.length){list.innerHTML='<div class="empty-note">No listings match. Loosen the filters.</div>';return;}
+  const sorted=subj?[...visible].sort((a,b)=>haversine(subj,a)-haversine(subj,b)):visible;
+  list.innerHTML=sorted.slice(0,60).map(l=>{
+    const pr=priceOf(l), isSel=selected.has(l.ListingId);
+    const d=subj?haversine(subj,l).toFixed(1)+" mi":"";
+    return `<div class="rrow ${isSel?'sel':''}">
+      <div class="th" style="background-image:url('${l.Photo}')"><span class="sb ${statusBadge(l.StandardStatus)}">${statusLabel(l.StandardStatus)}</span></div>
+      <div class="info">
+        <div class="price">${money(pr)}</div>
+        <div class="addr">${l.UnparsedAddress}</div>
+        <div class="meta">${l.City} · ${l.BedroomsTotal}bd/${l.BathroomsTotalInteger}ba · ${l.LivingArea.toLocaleString()}sf${d?' · '+d:''}</div>
+        <div class="acts">
+          <button class="inc ${isSel?'on':''}" data-id="${l.ListingId}">${isSel?'✓ Added':'Add comp'}</button>
+          <button class="sub" data-sub="${l.ListingId}">Set subject</button>
+        </div>
+      </div></div>`;
+  }).join("");
+  list.querySelectorAll('.inc').forEach(b=>b.onclick=()=>toggleComp(b.dataset.id));
+  list.querySelectorAll('.sub').forEach(b=>b.onclick=()=>setSubject(b.dataset.sub));
+}
+
+function markerColor(l){return l.ListingId===subjectId?'#e3cb93':selected.has(l.ListingId)?'#b08d57':'#7aa35a';}
+function renderMarkers(){
+  if(!bmap) return;
+  markerLayer.clearLayers();
+  const subj=LISTINGS.find(l=>l.ListingId===subjectId);
+  const show=[...visible];
+  if(subj && !show.includes(subj)) show.push(subj);
+  show.forEach(l=>{
+    const isSubj=l.ListingId===subjectId, isSel=selected.has(l.ListingId);
+    const m=L.circleMarker([l.Latitude,l.Longitude],{
+      radius:isSubj?9:isSel?8:5, color:'#0a0a0b', weight:1,
+      fillColor:markerColor(l), fillOpacity:0.95});
+    m.bindPopup(`<div class="pp"><div class="p">${money(priceOf(l))}</div><div class="a">${l.UnparsedAddress}</div>
+      <div class="m">${l.City} · ${statusLabel(l.StandardStatus)} · ${l.BedroomsTotal}bd/${l.BathroomsTotalInteger}ba · ${l.LivingArea.toLocaleString()}sf</div>
+      <div class="b"><button class="gold" onclick="window.toggleComp('${l.ListingId}')">${isSel?'Remove comp':'Add comp'}</button>
+      <button onclick="window.setSubject('${l.ListingId}')">Set subject</button></div></div>`);
+    markerLayer.addLayer(m);
+  });
+}
+
+function toggleComp(id){
+  if(id===subjectId) return;
+  selected.has(id)?selected.delete(id):selected.add(id);
+  renderList();renderMarkers();updateSel();
+}
+function setSubject(id){
+  subjectId=id; selected.delete(id);
+  const s=LISTINGS.find(l=>l.ListingId===id);
+  $('subj-input').value=s.UnparsedAddress+", "+s.City;
+  $('subj-chosen').className="subj";
+  $('subj-chosen').innerHTML=`<div class="th" style="background-image:url('${s.Photo}')"></div>
+    <div><div class="a">${s.UnparsedAddress}</div><div class="m">${s.City} · ${s.LivingArea.toLocaleString()}sf · ${s.BedroomsTotal}bd/${s.BathroomsTotalInteger}ba · ${money(priceOf(s))}</div></div>`;
+  if(bmap) bmap.setView([s.Latitude,s.Longitude],13);
+  applyFilters();updateSel();
+}
+function updateSel(){
+  $('sel-n').textContent=selected.size?"("+selected.size+")":"";
+  const tray=$('tray');
+  if(!selected.size){tray.innerHTML='<span class="none">None yet — add at least 2.</span>';}
+  else{tray.innerHTML=[...selected].map(id=>{const l=LISTINGS.find(x=>x.ListingId===id);
+    return `<span class="t"><b>${money(priceOf(l))}</b> ${l.UnparsedAddress.split(' ').slice(0,3).join(' ')} <button onclick="window.toggleComp('${id}')">×</button></span>`;}).join("");}
+  const subj=LISTINGS.find(l=>l.ListingId===subjectId);
+  $('subjnote').innerHTML=subj?`Subject: <b>${subj.UnparsedAddress}</b>`:"No subject selected";
+  const ok=subjectId && selected.size>=2; $('generate').disabled=!ok;
+}
+window.toggleComp=toggleComp; window.setSubject=setSubject;
+
+$('apply').onclick=applyFilters;
+$('reset').onclick=()=>{
+  document.querySelectorAll('#f-city .chip,#f-zip .chip').forEach(c=>c.classList.remove('on'));
+  document.querySelectorAll('#f-status .chip').forEach(c=>c.classList.add('on'));
+  ['f-pmin','f-pmax','f-beds','f-baths','f-sqmin','f-sqmax','f-ymin','f-ymax','f-garage','f-dist','f-months'].forEach(i=>$(i).value="");
+  ['f-dtype','f-style','f-levels','f-pool','f-cpool'].forEach(i=>$(i).value="");
+  applyFilters();
+};
+['f-pmin','f-pmax','f-beds','f-baths','f-sqmin','f-sqmax','f-ymin','f-ymax','f-garage','f-dist','f-months','f-dtype','f-style','f-levels','f-pool','f-cpool'].forEach(i=>$(i).addEventListener('change',applyFilters));
+$('subj-input').addEventListener('keydown',async e=>{if(e.key!=="Enter")return;
+  const raw=$('subj-input').value.trim();
+  if(LIVE()){
+    try{
+      const recs=await fetchLive({q:raw, top:5});
+      if(recs.length){ setSubject(recs[0].ListingId); }
+      else { $('subjnote').textContent="No match in ARMLS for that address/MLS #."; }
+    }catch(err){ console.error(err); $('subjnote').textContent="Live lookup failed — check proxy."; }
+    return;
+  }
+  const q=raw.toLowerCase();
+  const hit=LISTINGS.find(l=>(l.UnparsedAddress+", "+l.City).toLowerCase().includes(q)||l.ListingId===q);
+  if(hit)setSubject(hit.ListingId);});
+
+/* init map */
+function initMap(){
+  bmap=L.map('map',{scrollWheelZoom:true}).setView([33.535,-111.94],12);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{attribution:'&copy; OpenStreetMap &copy; CARTO',maxZoom:19}).addTo(bmap);
+  markerLayer=L.layerGroup().addTo(bmap);
+  setTimeout(()=>bmap.invalidateSize(),200);
+  renderMarkers();
+}
+
+/* ===================== PRESENTATION ===================== */
+let SUBJECT,COMPS,ALL,carouselTimer,pmapObj;
+$('generate').onclick=()=>{
+  SUBJECT=LISTINGS.find(l=>l.ListingId===subjectId);
+  COMPS=[...selected].map(id=>LISTINGS.find(l=>l.ListingId===id)).sort((a,b)=>haversine(SUBJECT,a)-haversine(SUBJECT,b));
+  COMPS.forEach(c=>c.DistanceMiles=+haversine(SUBJECT,c).toFixed(1));
+  ALL=[{...SUBJECT,_subject:true,_price:priceOf(SUBJECT)},...COMPS.map(c=>({...c,_subject:false,_price:priceOf(c)}))];
+  buildPresentation();
+  $('builder').classList.add('hidden'); $('presentation').classList.remove('hidden'); window.scrollTo(0,0);
+};
+$('back').onclick=()=>{if(carouselTimer)clearInterval(carouselTimer);
+  $('presentation').classList.add('hidden'); $('builder').classList.remove('hidden'); window.scrollTo(0,0);
+  setTimeout(()=>{if(bmap)bmap.invalidateSize();},150);};
+
+const ICON={
+  sqft:'<svg viewBox="0 0 24 24"><path d="M3 3h18v18H3z"/><path d="M3 9h4M3 15h4M9 21v-4M15 21v-4"/></svg>',
+  bed:'<svg viewBox="0 0 24 24"><path d="M3 18v-6h18v6M3 12V8a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4M3 18v2M21 18v2M7 12V9h4v3"/></svg>',
+  bath:'<svg viewBox="0 0 24 24"><path d="M4 12h16v3a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4z"/><path d="M6 12V6a2 2 0 0 1 2-2 2 2 0 0 1 2 2M7 19l-1 2M18 19l1 2"/></svg>',
+  cal:'<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="1"/><path d="M3 9h18M8 3v4M16 3v4"/></svg>',
+  pin:'<svg viewBox="0 0 24 24"><path d="M12 21s7-6.2 7-11a7 7 0 0 0-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.4"/></svg>',
+  price:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M14.5 9c-.5-1-1.5-1.5-2.6-1.5C10.3 7.5 9 8.4 9 9.7c0 2.8 5.5 1.6 5.5 4.6 0 1.3-1.3 2.2-2.9 2.2-1.2 0-2.3-.6-2.8-1.6M12 6v12"/></svg>',
+};
+function adjustComp(c){const M=activeAdj();let t=0;const add=(d,r)=>t+=d*r;
+  add(SUBJECT.LivingArea-c.LivingArea,M.perSqFt);add(SUBJECT.BedroomsTotal-c.BedroomsTotal,M.perBedroom);
+  add(SUBJECT.BathroomsTotalInteger-c.BathroomsTotalInteger,M.perBathroom);add(SUBJECT.GarageSpaces-c.GarageSpaces,M.perGarageStall);
+  add(SUBJECT.LotSizeAcres-c.LotSizeAcres,M.perAcreLot);if(SUBJECT.PrivatePool&&!c.PrivatePool)t+=M.pool;
+  return {base:priceOf(c),total:t,adjusted:priceOf(c)+t};}
+function buildPresentation(){
+  LEASECTX = txMode()==='lease';
+  $('pv-addr').textContent=SUBJECT.UnparsedAddress;
+  $('pv-disclaimer').textContent="This analysis is an estimate of value prepared for marketing purposes and is not an appraisal. Sample data shown; live figures reflect ARMLS via the Spark API once connected.";
+  buildHero();buildOverview();buildSpec();const rows=buildAdj();buildMarket(rows);buildReco(rows);buildMap();
+}
+function buildHero(){
+  const slides=$('slides'),dots=$('dots');
+  slides.innerHTML=ALL.map((p,i)=>{
+    const bar=[[ICON.sqft,p.LivingArea.toLocaleString(),"Square Feet"],[ICON.bed,p.BedroomsTotal,"Bed Rooms"],[ICON.bath,p.BathroomsTotalInteger,"Bath Rooms"],[ICON.cal,p.YearBuilt,"Built In"],[ICON.pin,p.City+", AZ","Location"],[ICON.price,money(p._price),L("List Price","Lease / mo")]].map(([ic,v,l])=>`<div class="s"><div class="tile">${ic}</div><div class="v">${v}</div><div class="l">${l}</div></div>`).join("");
+    const label=p._subject?"Subject Property":(statusLabel(p.StandardStatus)+" Comparable");
+    return `<div class="slide${i===0?' active':''}" data-i="${i}"><div class="img" style="background-image:url('${p.Photo}')"></div><div class="scrim"></div>
+      <div class="hero-cap"><div class="wrap"><div class="eyebrow">${label}</div><h1>${p.UnparsedAddress}</h1><div class="s">${p.City}, AZ ${p.PostalCode}</div></div></div>
+      <div class="statbar">${bar}</div></div>`;}).join("");
+  dots.innerHTML=ALL.map((_,i)=>`<button data-i="${i}" class="${i===0?'on':''}"></button>`).join("");
+  let idx=0;const go=n=>{idx=(n+ALL.length)%ALL.length;
+    slides.querySelectorAll('.slide').forEach(s=>s.classList.toggle('active',+s.dataset.i===idx));
+    dots.querySelectorAll('button').forEach(d=>d.classList.toggle('on',+d.dataset.i===idx));};
+  const reset=()=>{if(carouselTimer)clearInterval(carouselTimer);carouselTimer=setInterval(()=>go(idx+1),5000);};
+  $('next').onclick=()=>{go(idx+1);reset();};$('prev').onclick=()=>{go(idx-1);reset();};
+  dots.querySelectorAll('button').forEach(d=>d.onclick=()=>{go(+d.dataset.i);reset();});reset();
+}
+function buildOverview(){
+  $('ov-grid').innerHTML=ALL.map(p=>`<div class="ocard${p._subject?' subject':''}">
+    <div class="pbar"><span class="p">${money(p._price)}</span><span style="font-size:.6rem;letter-spacing:.12em;text-transform:uppercase">${p._subject?'Subject':statusLabel(p.StandardStatus)}</span></div>
+    <div class="ph" style="background-image:url('${p.Photo}')"><div class="addr">${p.UnparsedAddress}, ${p.City}, AZ ${p.PostalCode}</div></div>
+    <div class="feet"><span class="f">${ICON.sqft}<b>${p.LivingArea.toLocaleString()}</b></span><span class="f">${ICON.bed}<b>${p.BedroomsTotal}</b></span><span class="f">${ICON.bath}<b>${p.BathroomsTotalInteger}</b></span></div></div>`).join("");
+}
+function buildSpec(){
+  const cols=ALL;
+  const thumbs=`<thead><tr><th></th>${cols.map(p=>`<th><div class="thumb${p._subject?' subject':''}" style="background-image:url('${p.Photo}')"></div></th>`).join("")}</tr></thead>`;
+  const row=(label,fn)=>`<tr><th>${label}</th>${cols.map(p=>`<td class="${p._subject?'subject-col':''}">${fn(p)}</td>`).join("")}</tr>`;
+  $('spec-table').innerHTML=thumbs+`<tbody>
+    ${row("Address",p=>p.UnparsedAddress)}${row("Status",p=>p._subject?"Subject":statusLabel(p.StandardStatus))}
+    ${row("Dwelling Type",p=>p.DwellingType)}${row("Style",p=>p.DwellingStyle)}
+    ${row("Bedrooms",p=>p.BedroomsTotal)}${row("Bathrooms",p=>p.BathroomsTotalInteger)}
+    ${row("Sqft",p=>p.LivingArea.toLocaleString())}${row("Lot Size (sf)",p=>acresToSf(p.LotSizeAcres))}
+    ${row("Year Built",p=>p.YearBuilt)}${row(L("List / Sale Price","Monthly Rent"),p=>money(p._price))}
+    ${row(L("$/SQFT","$/SF · mo"),p=>fmt(ppsf(p._price,p.LivingArea)))}${row("Garage",p=>p.GarageSpaces)}
+    ${row("Stories",p=>p.Stories)}${row("Pool",p=>p.PrivatePool?"Yes":"No")}</tbody>`;
+}
+function buildAdj(){
+  const rows=COMPS.map(c=>({c,a:adjustComp(c)}));
+  const head=`<thead><tr><th>Attribute</th><th class="subject-col">Subject</th>${rows.map(r=>`<th>#${r.c.ListingId.slice(-3)}</th>`).join("")}</tr></thead>`;
+  const attr=(label,sv,fn)=>`<tr><td>${label}</td><td class="subject-col">${sv}</td>${rows.map(r=>`<td>${fn(r.c)}</td>`).join("")}</tr>`;
+  $('adj-table').innerHTML=head+`<tbody>
+    ${attr("Status","—",c=>statusLabel(c.StandardStatus))}${attr(L("Sale / list price","Monthly rent"),"—",c=>money(priceOf(c)))}
+    ${attr("Living area (sf)",SUBJECT.LivingArea.toLocaleString(),c=>c.LivingArea.toLocaleString())}
+    ${attr("Beds / baths",SUBJECT.BedroomsTotal+" / "+SUBJECT.BathroomsTotalInteger,c=>c.BedroomsTotal+" / "+c.BathroomsTotalInteger)}
+    ${attr("Garage",SUBJECT.GarageSpaces,c=>c.GarageSpaces)}${attr("Lot (acres)",SUBJECT.LotSizeAcres.toFixed(2),c=>c.LotSizeAcres.toFixed(2))}
+    <tr><td>Net adjustment</td><td class="subject-col">—</td>${rows.map(r=>{const cls=r.a.total>=0?"adj-pos":"adj-neg";const sg=r.a.total>=0?"+":"−";return `<td class="${cls}">${sg}${money(Math.abs(r.a.total))}</td>`;}).join("")}</tr>
+    <tr class="total-row"><td>${L("Indicated value","Indicated rent")}</td><td class="subject-col">—</td>${rows.map(r=>`<td>${money(r.a.adjusted)}</td>`).join("")}</tr></tbody>`;
+  const M=activeAdj(); const u=LEASECTX?"/mo":"";
+  $('adj-note').textContent=`Adjustments: ${fmt(M.perSqFt)}/sf${u}, ${fmt(M.perBedroom)}/bedroom${u}, ${fmt(M.perBathroom)}/bath${u}, ${fmt(M.perGarageStall)}/garage stall${u}, ${fmt(M.pool)} pool${u}, ${fmt(M.perAcreLot)}/acre${u}. Editable in the data layer.`;
+  return rows;
+}
+function buildMarket(rows){
+  const subjPPSF=rows.reduce((s,r)=>s+ppsf(r.a.adjusted,SUBJECT.LivingArea),0)/rows.length;
+  const items=rows.map(r=>({label:"#"+r.c.ListingId.slice(-3),v:ppsf(priceOf(r.c),r.c.LivingArea),subject:false}));
+  items.push({label:"Subject",v:subjPPSF,subject:true});const max=Math.max(...items.map(i=>i.v))*1.08;
+  $('ppsf-bars').innerHTML=items.map(i=>`<div class="bar ${i.subject?'subject':''}"><div class="col" style="height:${(i.v/max*100).toFixed(1)}%"></div><div class="v">${fmt(i.v)}</div><div class="x">${i.label}</div></div>`).join("");
+  const sold=COMPS.filter(c=>c.StandardStatus==="Closed");
+  const avg=sold.length?sold.reduce((s,c)=>s+ppsf(priceOf(c),c.LivingArea),0)/sold.length:subjPPSF;
+  const spr=sold.length?sold.reduce((s,c)=>s+(c.ClosePrice/c.ListPrice),0)/sold.length*100:0;
+  $('market-stats').innerHTML=[[fmt(avg),L("Avg sold $/sf","Avg leased $/sf·mo")],[sold.length?spr.toFixed(1)+"%":"—",L("Sale-to-list ratio","Lease-to-ask ratio")],[sold.length+" / "+COMPS.length,L("Closed comps","Leased comps")],[fmt(subjPPSF),L("Subject indicated $/sf","Subject $/sf·mo")]].map(([n,l])=>`<div class="m"><div class="n">${n}</div><div class="l">${l}</div></div>`).join("");
+}
+function buildReco(rows){
+  const vals=rows.map(r=>r.a.adjusted).sort((a,b)=>a-b);const mean=vals.reduce((s,v)=>s+v,0)/vals.length;
+  const rnd=LEASECTX?250:25000;
+  const low=Math.round(mean*0.97/rnd)*rnd, high=Math.round(mean*1.03/rnd)*rnd, tgt=Math.round(mean/rnd)*rnd;
+  // full numbers, never abbreviated
+  $('reco-range').textContent = LEASECTX ? `${fmt(low)} – ${fmt(high)} /mo` : `${fmt(low)} – ${fmt(high)}`;
+  document.querySelector('#reco h2').textContent = L("Suggested List Price","Suggested Monthly Lease");
+  document.querySelector('#reco .target').innerHTML = `${L("Target list price","Target monthly rent")}: <b id="reco-target">${money(tgt)}</b> · ${L("Indicated value from adjusted comps","Indicated rent from adjusted comps")}`;
+  $('reco-low').textContent=money(Math.min(...vals));$('reco-high').textContent=money(Math.max(...vals));
+  const span=Math.max(...vals)-Math.min(...vals);const pos=span?((tgt-Math.min(...vals))/span*100):50;
+  $('reco-pin').style.left=Math.max(2,Math.min(98,pos))+"%";
+}
+function buildMap(){
+  const note=$('map-note');if(pmapObj){pmapObj.remove();pmapObj=null;}
+  try{if(typeof L==="undefined")throw 0;
+    pmapObj=L.map('pmap',{scrollWheelZoom:false}).setView([SUBJECT.Latitude,SUBJECT.Longitude],13);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{attribution:'&copy; OpenStreetMap &copy; CARTO',maxZoom:19}).addTo(pmapObj);
+    const ic=(txt,sub)=>L.divIcon({html:`<div style="background:${sub?'#8a6c3c':'#c2a05c'};color:#fff;font:600 11px Jost,sans-serif;padding:5px 9px;border-radius:6px;white-space:nowrap;box-shadow:0 4px 10px rgba(0,0,0,.5);border:1px solid #f3ead5">${txt}</div>`,iconSize:[10,10],iconAnchor:[20,28]});
+    ALL.forEach(p=>L.marker([p.Latitude,p.Longitude],{icon:ic(p._subject?"★ "+money(p._price):money(p._price),!p._subject)}).addTo(pmapObj).bindPopup(`<b>${p.UnparsedAddress}</b><br>${money(p._price)} · ${p.LivingArea.toLocaleString()} sf`));
+    setTimeout(()=>pmapObj.invalidateSize(),200);
+    note.textContent=`Showing ${ALL.length} of ${ALL.length} selected listings · ${SUBJECT.City}, AZ`;
+  }catch(e){$('pmap').innerHTML='<div style="height:100%;display:grid;place-items:center;color:#9a948a;text-align:center;padding:20px">Map loads when online.</div>';}
+}
+
+/* boot */
+initFilterOptions();
+initMap();
+applyFilters();
+updateSel();
+</script>
+</body>
+</html>

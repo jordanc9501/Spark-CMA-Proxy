@@ -23,7 +23,7 @@ const SELECT = [
   "LivingArea","BedroomsTotal","BathroomsTotalInteger","GarageSpaces",
   "PoolPrivateYN","PoolFeatures","LotSizeAcres","LotSizeSquareFeet",
   "YearBuilt","StoriesTotal","Levels","PropertySubType","ArchitecturalStyle",
-  "Latitude","Longitude"
+  "PropertyType","Latitude","Longitude"
 ].join(",");
 
 const esc = s => String(s).replace(/'/g, "''");
@@ -64,6 +64,8 @@ function mapRecord(r) {
     DwellingStyle: Array.isArray(r.ArchitecturalStyle) ? (r.ArchitecturalStyle[0] || "") : (r.ArchitecturalStyle || ""),
     Latitude: r.Latitude ?? null,
     Longitude: r.Longitude ?? null,
+    PropertyType: r.PropertyType || "",
+    TransactionType: /lease|rent/i.test(r.PropertyType || "") ? "Lease" : "Sale",
     Photo: pickPhoto(r.Media),
   };
 }
@@ -87,6 +89,10 @@ export default async function handler(req, res) {
     const term = esc(q.q);
     clauses.push(`(contains(UnparsedAddress,'${term}') or ListingId eq '${term}')`);
   }
+
+  // transaction type: sale vs lease (rental comps)
+  if (q.ptype === "sale") clauses.push(`PropertyType eq 'Residential'`);
+  else if (q.ptype === "lease") clauses.push(`PropertyType eq 'Residential Lease'`);
 
   // status (csv) — UI sends "Closed" for Sold already
   if (q.status) {
