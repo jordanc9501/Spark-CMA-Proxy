@@ -92,12 +92,13 @@ export default async function handler(req, res) {
   const q = req.query;
 
   // helper: run a Spark query and map results
-  async function sparkFetch(filterStr, topN) {
+  async function sparkFetch(filterStr, topN, skip) {
     const p = new URLSearchParams();
     if (filterStr) p.set("$filter", filterStr);
     p.set("$select", SELECT);
     p.set("$expand", "Media($select=MediaURL,Order,MediaCategory)");
     p.set("$top", String(topN));
+    if (skip) p.set("$skip", String(skip));
     p.set("$orderby", "ModificationTimestamp desc");
     const r = await fetch(`${BASE}/Property?${p.toString()}`, { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" } });
     if (!r.ok) { const t = await r.text(); const e = new Error("Spark " + r.status + ": " + t.slice(0, 300)); e.status = r.status; throw e; }
@@ -118,12 +119,19 @@ export default async function handler(req, res) {
         const CITIES = ["Paradise Valley","Scottsdale","Phoenix","Fountain Hills","Cave Creek","Carefree","Tempe","Mesa","Chandler","Gilbert","Glendale","Peoria","Surprise","Goodyear","Litchfield Park"];
         const cityMatch = CITIES.find(c => term.toLowerCase().includes(c.toLowerCase()));
         const filt = zip ? `PostalCode eq '${esc(zip)}'` : (cityMatch ? `City eq '${esc(cityMatch)}'` : "");
-        out = await sparkFetch(filt, 200);
         const TYPES = ["e","w","n","s","st","rd","road","dr","drive","ln","lane","ave","avenue","way","ct","court","pl","place","blvd","pkwy","parkway","trail","cir","circle","az","arizona"];
         const cityWords = cityMatch ? cityMatch.toLowerCase().split(" ") : [];
         const names = term.toLowerCase().replace(/[.,#]/g, " ").split(/\s+/)
           .filter(w => w && !TYPES.includes(w) && w !== zip && !cityWords.includes(w));
-        if (names.length) out = out.filter(x => { const a = (x.UnparsedAddress || "").toLowerCase(); return names.every(w => a.includes(w)); });
+        // page through results (up to ~1600) so a specific address isn't missed by the per-page cap
+        out = [];
+        for (let skip = 0; skip <= 1400; skip += 200) {
+          let batch;
+          try { batch = await sparkFetch(filt, 200, skip); } catch (_) { break; }
+          if (!batch.length) break;
+          out = out.concat(names.length ? batch.filter(x => { const a = (x.UnparsedAddress || "").toLowerCase(); return names.every(w => a.includes(w)); }) : batch);
+          if (out.length >= 8 || batch.length < 200) break;
+        }
         out = out.slice(0, 10);
       }
       res.setHeader("Cache-Control", "no-store");
