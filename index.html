@@ -226,7 +226,7 @@
     <div class="eyebrow" style="text-align:center">Phoenix Living · CMA Builder</div>
     <h2>Team Access</h2>
     <p>Enter the team password to load live MLS data.</p>
-    <input id="login-pw" type="password" placeholder="Team password" autocomplete="off" autocorrect="off" autocapitalize="off" name="cma-team-key" data-lpignore="true" data-1p-ignore="true">
+    <input id="login-pw" type="text" placeholder="Team password" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" name="cma-team-key" data-lpignore="true" data-1p-ignore="true">
     <button id="login-go" class="btn" style="width:100%;margin-top:12px">Enter</button>
     <div id="login-err" class="login-err"></div>
   </div>
@@ -477,7 +477,7 @@ let LEASECTX=false;
 const txMode=()=>document.querySelector('#f-tx .chip.on')?.dataset.v||'sale';
 const money=n=>LEASECTX?fmt(n)+"/mo":fmt(n);            // full numbers, never abbreviated
 const ppsfTxt=v=>LEASECTX?fmt(v)+"/sf·mo":fmt(v)+"/sf";
-const L=(saleTxt,leaseTxt)=>LEASECTX?leaseTxt:saleTxt;
+const LBL=(saleTxt,leaseTxt)=>LEASECTX?leaseTxt:saleTxt;
 const activeAdj=()=>LEASECTX?ADJ_LEASE:ADJ;
 const statusLabel=s=>s==="Closed"?(LEASECTX?"Leased":"Sold"):s;
 const statusBadge=s=>s==="Closed"?"badge-sold":s==="Pending"?"badge-pending":s==="Coming Soon"?"badge-coming":"badge-active";
@@ -718,7 +718,7 @@ function buildPresentation(){
 function buildHero(){
   const slides=$('slides'),dots=$('dots');
   slides.innerHTML=ALL.map((p,i)=>{
-    const bar=[[ICON.sqft,p.LivingArea.toLocaleString(),"Square Feet"],[ICON.bed,p.BedroomsTotal,"Bed Rooms"],[ICON.bath,p.BathroomsTotalInteger,"Bath Rooms"],[ICON.cal,p.YearBuilt,"Built In"],[ICON.pin,p.City+", AZ","Location"],[ICON.price,money(p._price),L("List Price","Lease / mo")]].map(([ic,v,l])=>`<div class="s"><div class="tile">${ic}</div><div class="v">${v}</div><div class="l">${l}</div></div>`).join("");
+    const bar=[[ICON.sqft,p.LivingArea.toLocaleString(),"Square Feet"],[ICON.bed,p.BedroomsTotal,"Bed Rooms"],[ICON.bath,p.BathroomsTotalInteger,"Bath Rooms"],[ICON.cal,p.YearBuilt,"Built In"],[ICON.pin,p.City+", AZ","Location"],[ICON.price,money(p._price),LBL("List Price","Lease / mo")]].map(([ic,v,l])=>`<div class="s"><div class="tile">${ic}</div><div class="v">${v}</div><div class="l">${l}</div></div>`).join("");
     const label=p._subject?"Subject Property":(statusLabel(p.StandardStatus)+" Comparable");
     return `<div class="slide${i===0?' active':''}" data-i="${i}"><div class="img" style="background-image:url('${p.Photo}')"></div><div class="scrim"></div>
       <div class="hero-cap"><div class="wrap"><div class="eyebrow">${label}</div><h1>${p.UnparsedAddress}</h1><div class="s">${p.City}, AZ ${p.PostalCode}</div></div></div>
@@ -746,8 +746,8 @@ function buildSpec(){
     ${row("Dwelling Type",p=>p.DwellingType)}${row("Style",p=>p.DwellingStyle)}
     ${row("Bedrooms",p=>p.BedroomsTotal)}${row("Bathrooms",p=>p.BathroomsTotalInteger)}
     ${row("Sqft",p=>p.LivingArea.toLocaleString())}${row("Lot Size (sf)",p=>acresToSf(p.LotSizeAcres))}
-    ${row("Year Built",p=>p.YearBuilt)}${row(L("List / Sale Price","Monthly Rent"),p=>money(p._price))}
-    ${row(L("$/SQFT","$/SF · mo"),p=>fmt(ppsf(p._price,p.LivingArea)))}${row("Garage",p=>p.GarageSpaces)}
+    ${row("Year Built",p=>p.YearBuilt)}${row(LBL("List / Sale Price","Monthly Rent"),p=>money(p._price))}
+    ${row(LBL("$/SQFT","$/SF · mo"),p=>fmt(ppsf(p._price,p.LivingArea)))}${row("Garage",p=>p.GarageSpaces)}
     ${row("Stories",p=>p.Stories)}${row("Pool",p=>p.PrivatePool?"Yes":"No")}</tbody>`;
 }
 function buildAdj(){
@@ -755,12 +755,12 @@ function buildAdj(){
   const head=`<thead><tr><th>Attribute</th><th class="subject-col">Subject</th>${rows.map(r=>`<th>#${r.c.ListingId.slice(-3)}</th>`).join("")}</tr></thead>`;
   const attr=(label,sv,fn)=>`<tr><td>${label}</td><td class="subject-col">${sv}</td>${rows.map(r=>`<td>${fn(r.c)}</td>`).join("")}</tr>`;
   $('adj-table').innerHTML=head+`<tbody>
-    ${attr("Status","—",c=>statusLabel(c.StandardStatus))}${attr(L("Sale / list price","Monthly rent"),"—",c=>money(priceOf(c)))}
+    ${attr("Status","—",c=>statusLabel(c.StandardStatus))}${attr(LBL("Sale / list price","Monthly rent"),"—",c=>money(priceOf(c)))}
     ${attr("Living area (sf)",SUBJECT.LivingArea.toLocaleString(),c=>c.LivingArea.toLocaleString())}
     ${attr("Beds / baths",SUBJECT.BedroomsTotal+" / "+SUBJECT.BathroomsTotalInteger,c=>c.BedroomsTotal+" / "+c.BathroomsTotalInteger)}
     ${attr("Garage",SUBJECT.GarageSpaces,c=>c.GarageSpaces)}${attr("Lot (acres)",SUBJECT.LotSizeAcres.toFixed(2),c=>c.LotSizeAcres.toFixed(2))}
     <tr><td>Net adjustment</td><td class="subject-col">—</td>${rows.map(r=>{const cls=r.a.total>=0?"adj-pos":"adj-neg";const sg=r.a.total>=0?"+":"−";return `<td class="${cls}">${sg}${money(Math.abs(r.a.total))}</td>`;}).join("")}</tr>
-    <tr class="total-row"><td>${L("Indicated value","Indicated rent")}</td><td class="subject-col">—</td>${rows.map(r=>`<td>${money(r.a.adjusted)}</td>`).join("")}</tr></tbody>`;
+    <tr class="total-row"><td>${LBL("Indicated value","Indicated rent")}</td><td class="subject-col">—</td>${rows.map(r=>`<td>${money(r.a.adjusted)}</td>`).join("")}</tr></tbody>`;
   const M=activeAdj(); const u=LEASECTX?"/mo":"";
   $('adj-note').textContent=`Adjustments: ${fmt(M.perSqFt)}/sf${u}, ${fmt(M.perBedroom)}/bedroom${u}, ${fmt(M.perBathroom)}/bath${u}, ${fmt(M.perGarageStall)}/garage stall${u}, ${fmt(M.pool)} pool${u}, ${fmt(M.perAcreLot)}/acre${u}. Editable in the data layer.`;
   return rows;
@@ -773,7 +773,7 @@ function buildMarket(rows){
   const sold=COMPS.filter(c=>c.StandardStatus==="Closed");
   const avg=sold.length?sold.reduce((s,c)=>s+ppsf(priceOf(c),c.LivingArea),0)/sold.length:subjPPSF;
   const spr=sold.length?sold.reduce((s,c)=>s+(c.ClosePrice/c.ListPrice),0)/sold.length*100:0;
-  $('market-stats').innerHTML=[[fmt(avg),L("Avg sold $/sf","Avg leased $/sf·mo")],[sold.length?spr.toFixed(1)+"%":"—",L("Sale-to-list ratio","Lease-to-ask ratio")],[sold.length+" / "+COMPS.length,L("Closed comps","Leased comps")],[fmt(subjPPSF),L("Subject indicated $/sf","Subject $/sf·mo")]].map(([n,l])=>`<div class="m"><div class="n">${n}</div><div class="l">${l}</div></div>`).join("");
+  $('market-stats').innerHTML=[[fmt(avg),LBL("Avg sold $/sf","Avg leased $/sf·mo")],[sold.length?spr.toFixed(1)+"%":"—",LBL("Sale-to-list ratio","Lease-to-ask ratio")],[sold.length+" / "+COMPS.length,LBL("Closed comps","Leased comps")],[fmt(subjPPSF),LBL("Subject indicated $/sf","Subject $/sf·mo")]].map(([n,l])=>`<div class="m"><div class="n">${n}</div><div class="l">${l}</div></div>`).join("");
 }
 function buildReco(rows){
   const vals=rows.map(r=>r.a.adjusted).sort((a,b)=>a-b);const mean=vals.reduce((s,v)=>s+v,0)/vals.length;
@@ -781,8 +781,8 @@ function buildReco(rows){
   const low=Math.round(mean*0.97/rnd)*rnd, high=Math.round(mean*1.03/rnd)*rnd, tgt=Math.round(mean/rnd)*rnd;
   // full numbers, never abbreviated
   $('reco-range').textContent = LEASECTX ? `${fmt(low)} – ${fmt(high)} /mo` : `${fmt(low)} – ${fmt(high)}`;
-  document.querySelector('#reco h2').textContent = L("Suggested List Price","Suggested Monthly Lease");
-  document.querySelector('#reco .target').innerHTML = `${L("Target list price","Target monthly rent")}: <b id="reco-target">${money(tgt)}</b> · ${L("Indicated value from adjusted comps","Indicated rent from adjusted comps")}`;
+  document.querySelector('#reco h2').textContent = LBL("Suggested List Price","Suggested Monthly Lease");
+  document.querySelector('#reco .target').innerHTML = `${LBL("Target list price","Target monthly rent")}: <b id="reco-target">${money(tgt)}</b> · ${LBL("Indicated value from adjusted comps","Indicated rent from adjusted comps")}`;
   $('reco-low').textContent=money(Math.min(...vals));$('reco-high').textContent=money(Math.max(...vals));
   const span=Math.max(...vals)-Math.min(...vals);const pos=span?((tgt-Math.min(...vals))/span*100):50;
   $('reco-pin').style.left=Math.max(2,Math.min(98,pos))+"%";
@@ -805,7 +805,7 @@ initMap();
 updateSel();
 $('login-go').onclick=submitLogin;
 $('login-pw').addEventListener('keydown',e=>{if(e.key==='Enter')submitLogin();});
-if(LIVE() && !sessionStorage.getItem('appkey')){ showLogin(); }   // require team password before live data
+if(LIVE()){ sessionStorage.removeItem('appkey'); showLogin(); }   // always start clean: clear any stale session, require team password
 else { applyFilters(); }
 </script>
 </body>
