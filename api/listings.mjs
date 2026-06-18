@@ -80,9 +80,9 @@ export default async function handler(req, res) {
 
   // team password gate (free alternative to paid deployment protection).
   // Set APP_PASSWORD in Vercel env vars; the builder sends it as the x-app-key header.
-  const APP_PASSWORD = process.env.APP_PASSWORD;
+  const APP_PASSWORD = (process.env.APP_PASSWORD || "").trim();
   if (APP_PASSWORD) {
-    const key = req.headers["x-app-key"] || req.query.key || "";
+    const key = ((req.headers["x-app-key"] || req.query.key || "") + "").trim();
     if (key !== APP_PASSWORD) return res.status(401).json({ error: "Unauthorized — team password required." });
   }
 
